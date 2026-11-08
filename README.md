@@ -31,4 +31,4 @@ Dependensi PRD dikunci di pubspec.lock. Jangan upgrade saat build. SDK Supabase,
 
 Buka demo lokal. Fixture memakai 9 November 2026 pukul 18.00 WIB, bukan jam perangkat. T01 240 menit, T02 120 menit, T03 180 menit; kapasitas bersih 420 menit. Implementasi dan hasil pengujian per tahap dicatat di [progress](docs/PROGRESS.md).
 
-Android smoke test, plugin nyata, APK, keamanan/RLS dan transaksi backend belum diverifikasi. Signing release masih template debug dan bukan konfigurasi rilis produksi.
+Android smoke test, plugin nyata, APK, keamanan/RLS dan transaksi backend belum diverifikasi. Supabase CLI belum tersedia pada environment ini, sehingga Task 4 belum dimulai. Signing release masih template debug dan bukan konfigurasi rilis produksi.

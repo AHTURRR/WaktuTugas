@@ -18,6 +18,19 @@ int intField(Json json, String key) {
 
 DateTime instant(Json json, String key) {
   final value = textField(json, key);
+  final match = RegExp(
+    r'^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|[+-](\d{2}):(\d{2}))$',
+  ).firstMatch(value);
+  require(match != null, '$key harus timestamp ISO dengan zona waktu.');
+  validDate(match![1]!);
+  require(
+    int.parse(match[2]!) < 24 &&
+        int.parse(match[3]!) < 60 &&
+        int.parse(match[4]!) < 60 &&
+        (match[6] == null ||
+            (int.parse(match[6]!) < 24 && int.parse(match[7]!) < 60)),
+    '$key memuat jam tidak valid.',
+  );
   require(
     RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(value),
     '$key wajib memiliki zona waktu.',

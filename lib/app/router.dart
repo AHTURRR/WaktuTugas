@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/login_screen.dart';
+import '../features/home/home_screen.dart';
+import '../features/tasks/tasks_screen.dart';
+import '../features/tasks/task_form_screen.dart';
+import '../features/time/time_screen.dart';
+import '../features/schedule/schedule_screen.dart';
+import '../features/schedule/preview_screen.dart';
+import '../features/schedule/session_screen.dart';
+import '../features/shared.dart';
 import '../state/auth_controller.dart';
 import '../state/planner_controller.dart';
 
@@ -24,7 +32,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
     routes: [
       GoRoute(
         path: '/login',
-        builder: (context, state) => LoginScreen(auth: auth),
+        builder: (c, s) => LoginScreen(auth: auth),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => Scaffold(
@@ -40,11 +48,19 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
           ),
           body: Column(
             children: [
-              const MaterialBanner(
-                content: Text(
-                  'Demo lokal • 9 November 2026, 18.00 WIB • data direset saat keluar',
+              ListenableBuilder(
+                listenable: planner,
+                builder: (c, _) => Container(
+                  width: double.infinity,
+                  color: Theme.of(c).colorScheme.secondaryContainer,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  child: Text(
+                    'Demo lokal • ${dateTimeLabel(planner.now)}\nData contoh hanya tersimpan selama aplikasi terbuka.',
+                  ),
                 ),
-                actions: [SizedBox.shrink()],
               ),
               Expanded(child: shell),
             ],
@@ -77,7 +93,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
             routes: [
               GoRoute(
                 path: '/home',
-                builder: (c, s) => const Center(child: Text('Ringkasan tugas')),
+                builder: (c, s) => HomeScreen(planner: planner),
               ),
             ],
           ),
@@ -85,21 +101,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
             routes: [
               GoRoute(
                 path: '/tasks',
-                builder: (c, s) => ListView(
-                  children: [
-                    for (final t in planner.snapshot.tasks)
-                      ListTile(
-                        title: Text(t.title),
-                        subtitle: Text('${t.remainingMinutes} menit'),
-                        onTap: () => c.push('/task/${t.id}'),
-                      ),
-                    IconButton(
-                      onPressed: () => c.push('/task/new'),
-                      tooltip: 'Tambah tugas',
-                      icon: const Icon(Icons.add),
-                    ),
-                  ],
-                ),
+                builder: (c, s) => TasksScreen(planner: planner),
               ),
             ],
           ),
@@ -107,8 +109,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
             routes: [
               GoRoute(
                 path: '/time',
-                builder: (c, s) =>
-                    const Center(child: Text('Waktu pengerjaan')),
+                builder: (c, s) => TimeScreen(planner: planner),
               ),
             ],
           ),
@@ -116,12 +117,9 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
             routes: [
               GoRoute(
                 path: '/schedule',
-                builder: (c, s) => Center(
-                  child: Text(
-                    s.uri.queryParameters['missing'] == '1'
-                        ? 'Hitung pratinjau terlebih dahulu.'
-                        : 'Jadwal terkonfirmasi',
-                  ),
+                builder: (c, s) => ScheduleScreen(
+                  planner: planner,
+                  missingPreview: s.uri.queryParameters['missing'] == '1',
                 ),
               ),
             ],
@@ -131,26 +129,24 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
       GoRoute(
         path: '/task/new',
         parentNavigatorKey: root,
-        builder: (c, s) =>
-            Scaffold(appBar: AppBar(title: const Text('Tambah tugas'))),
+        builder: (c, s) => TaskFormScreen(planner: planner),
       ),
       GoRoute(
         path: '/task/:id',
         parentNavigatorKey: root,
         builder: (c, s) =>
-            Scaffold(appBar: AppBar(title: const Text('Ubah tugas'))),
+            TaskFormScreen(planner: planner, taskId: s.pathParameters['id']),
       ),
       GoRoute(
         path: '/schedule/preview',
         parentNavigatorKey: root,
-        builder: (c, s) =>
-            Scaffold(appBar: AppBar(title: const Text('Pratinjau'))),
+        builder: (c, s) => PreviewScreen(planner: planner),
       ),
       GoRoute(
         path: '/session/:id',
         parentNavigatorKey: root,
         builder: (c, s) =>
-            Scaffold(appBar: AppBar(title: const Text('Progres sesi'))),
+            SessionScreen(planner: planner, sessionId: s.pathParameters['id']!),
       ),
     ],
   );
