@@ -13,3 +13,7 @@ In progress. Toolchain: Flutter 3.44.8 stable, Dart 3.12.2, Android SDK 36.0.0, 
 
 Task 1: local checks passed: flutter analyze (no issues), flutter test test/planner test/ui (4 tests), dart format --output=none --set-exit-if-changed lib test (0 changed). Initial tests failed on missing implementation; navigation helper corrected for Indonesian back tooltip. Android not run. Placeholder routes will be completed in Task 3.
 
+
+## Task 2
+Local checks: 16 tests passed across planner/UI; initial planner tests failed before files existed. Corrected a test expectation: 20:00-20:30 WIB gives 30 of 90 requested minutes (60 missing), then the next task uses 20:30-21:30. No scheduling rule changed. Intervals, 14-date WIB window, ceil-minute, deterministic order and completed-history blocking implemented. Android not run.
+
