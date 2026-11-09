@@ -11,59 +11,108 @@ class TasksScreen extends StatelessWidget {
     listenable: planner,
     builder: (context, _) => PageContent(
       children: [
-        const PageHeading(
-          'Tugas',
-          'Catat sisa pekerjaan, bukan hanya tenggatnya.',
+        Text(
+          '${planner.snapshot.tasks.where((t) => t.remainingMinutes > 0).length} tugas aktif · ${planner.snapshot.tasks.fold(0, (int n, t) => n + t.remainingMinutes)} menit tersisa',
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Tooltip(
-            message: 'Tambah tugas',
-            child: FilledButton.icon(
-              onPressed: planner.isPending
-                  ? null
-                  : () => context.push('/task/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah tugas'),
-            ),
+        const SizedBox(height: 12),
+        Tooltip(
+          message: 'Tambah tugas',
+          child: AppButton(
+            label: 'Tambah tugas',
+            icon: 'imgPlus',
+            onPressed: planner.isPending || planner.isOfflineSnapshot
+                ? null
+                : () => context.push('/task/new'),
           ),
         ),
+        const SizedBox(height: 12),
         ErrorNotice(planner.error),
         if (planner.snapshot.tasks.isEmpty)
-          const Text('Belum ada tugas. Tambahkan tugas pertama Anda.'),
+          const EmptyState(
+            title: 'Belum ada tugas',
+            message:
+                'Tambahkan nama, tenggat, dan sisa menit untuk mulai merencanakan.',
+          ),
         for (final task in planner.snapshot.tasks)
-          Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(16),
-              title: Text(task.title),
-              subtitle: Text(
-                '${task.course == null ? '' : '${task.course}\n'}${dateTimeLabel(task.deadlineAt)}\n${task.remainingMinutes == 0 ? 'Selesai' : '${task.remainingMinutes} menit tersisa'}${task.remainingMinutes > 0 && !task.deadlineAt.isAfter(planner.now) ? ' • Terlambat' : ''}',
-              ),
-              onTap: () => context.push('/task/${task.id}'),
-              trailing: IconButton(
-                tooltip: 'Hapus ${task.title}',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: planner.isPending
-                    ? null
-                    : () async {
-                        final revision = planner.snapshot.revision;
-                        final confirmed = await confirmDelete(
-                          context,
-                          'Hapus tugas?',
-                          '${task.title}\nSeluruh sesi terkait, termasuk riwayat, juga akan dihapus.',
-                          'Hapus tugas dan sesi',
-                        );
-                        if (confirmed) {
-                          await planner.deleteTask(
-                            task.id,
-                            confirmed: true,
-                            expectedRevision: revision,
-                          );
-                        }
-                      },
-              ),
+          PaperCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.title, style: Theme.of(context).textTheme.titleLarge),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    StatusBadge(
+                      task.remainingMinutes == 0
+                          ? 'Selesai'
+                          : !task.deadlineAt.isAfter(planner.now)
+                          ? 'Terlambat'
+                          : 'Aktif',
+                      icon: task.remainingMinutes == 0
+                          ? 'imgCheckCircle'
+                          : !task.deadlineAt.isAfter(planner.now)
+                          ? 'imgAlertCircle'
+                          : 'imgClock',
+                    ),
+                    IconButton(
+                      tooltip: 'Ubah ${task.title}',
+                      icon: const DesignIcon('imgEdit', size: 20),
+                      onPressed: planner.isPending || planner.isOfflineSnapshot
+                          ? null
+                          : () => context.push('/task/${task.id}'),
+                    ),
+                    IconButton(
+                      tooltip: 'Hapus ${task.title}',
+                      icon: const DesignIcon('imgTrash', size: 20),
+                      onPressed: planner.isPending || planner.isOfflineSnapshot
+                          ? null
+                          : () async {
+                              final revision = planner.snapshot.revision;
+                              final confirmed = await confirmDelete(
+                                context,
+                                'Hapus tugas?',
+                                '${task.title}\nSeluruh sesi terkait, termasuk riwayat, juga akan dihapus.',
+                                'Hapus tugas dan sesi',
+                              );
+                              if (confirmed) {
+                                await planner.deleteTask(
+                                  task.id,
+                                  confirmed: true,
+                                  expectedRevision: revision,
+                                );
+                              }
+                            },
+                    ),
+                  ],
+                ),
+                if (task.course != null) ...[
+                  const SizedBox(height: 12),
+                  Text(task.course!),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const DesignIcon('imgCalendar', size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        dateTimeLabel(task.deadlineAt),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('${task.remainingMinutes} menit tersisa'),
+              ],
             ),
           ),
+        const Text(
+          'Perubahan tugas tidak mengganti jadwal tersimpan secara otomatis.',
+          style: TextStyle(fontSize: 12),
+        ),
       ],
     ),
   );

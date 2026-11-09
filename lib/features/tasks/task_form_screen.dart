@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:intl/intl.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
@@ -41,31 +42,48 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     super.dispose();
   }
 
-  Future<void> pickDeadline() async {
+  Future<void> pickDeadline({bool timeOnly = false}) async {
     final local = tz.TZDateTime.from(deadline, jakarta);
-    final date = await showDatePicker(
-      context: context,
-      initialDate: DateTime(local.year, local.month, local.day),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100, 12, 31),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: local.hour, minute: local.minute),
-    );
-    if (time != null && mounted) {
-      setState(
-        () => deadline = tz.TZDateTime(
-          jakarta,
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        ).toUtc(),
+    DateTime? date;
+    TimeOfDay? time;
+    if (timeOnly) {
+      time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: local.hour, minute: local.minute),
       );
+      if (time == null || !mounted) return;
+    } else {
+      date = await showDatePicker(
+        context: context,
+        initialDate: DateTime(local.year, local.month, local.day),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100, 12, 31),
+      );
+      if (date == null || !mounted) return;
     }
+    setState(
+      () => deadline = tz.TZDateTime(
+        jakarta,
+        date?.year ?? local.year,
+        date?.month ?? local.month,
+        date?.day ?? local.day,
+        time?.hour ?? local.hour,
+        time?.minute ?? local.minute,
+      ).toUtc(),
+    );
+  }
+
+  Future<void> save() async {
+    if (!form.currentState!.validate()) return;
+    final ok = await widget.planner.saveTask(
+      id: widget.taskId,
+      title: title.text,
+      course: course.text.trim().isEmpty ? null : course.text.trim(),
+      deadline: deadline,
+      remaining: int.parse(remaining.text),
+      expectedRevision: revision,
+    );
+    if (ok && mounted) Navigator.pop(context);
   }
 
   @override
@@ -76,41 +94,70 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     body: ListenableBuilder(
       listenable: widget.planner,
       builder: (context, _) {
-        final p = widget.planner;
+        final p = widget.planner, locked = p.isPending || p.isOfflineSnapshot;
+        final unknown =
+            p.errorCode == 'TIMEOUT' || p.errorCode == 'UNKNOWN_ERROR';
         if (widget.taskId != null && p.taskById(widget.taskId!) == null) {
           return const Center(child: Text('Tugas tidak ditemukan.'));
         }
         return Form(
           key: form,
           child: PageContent(
+            actions: FormActions(
+              label: p.isPending ? 'Menyimpan…' : 'Simpan tugas',
+              onSave: locked || unknown ? null : save,
+              onCancel: p.isPending ? null : () => Navigator.pop(context),
+            ),
             children: [
-              const Text(
-                'Semua tanggal dan jam memakai WIB. Perubahan tidak memindahkan jadwal yang sudah dikonfirmasi.',
-              ),
-              const SizedBox(height: 20),
+              const Text('Tentukan tenggat dan pekerjaan yang masih tersisa.'),
+              const SizedBox(height: 16),
               TextFormField(
                 key: const Key('title'),
                 controller: title,
+                enabled: !locked,
                 maxLength: 120,
-                decoration: const InputDecoration(labelText: 'Nama tugas'),
+                decoration: const InputDecoration(labelText: 'Nama tugas *'),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Nama wajib diisi.' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: course,
+                enabled: !locked,
                 maxLength: 100,
                 decoration: const InputDecoration(
                   labelText: 'Mata kuliah (opsional)',
                 ),
               ),
               const SizedBox(height: 16),
+              ResponsiveFields(
+                first: PickerField(
+                  label: 'Tanggal tenggat *',
+                  value: DateFormat(
+                    'd MMM yyyy',
+                    'id_ID',
+                  ).format(tz.TZDateTime.from(deadline, jakarta)),
+                  icon: 'imgCalendar',
+                  onTap: locked ? null : () => pickDeadline(),
+                ),
+                second: PickerField(
+                  label: 'Waktu · WIB *',
+                  value: clockLabel(deadline),
+                  icon: 'imgClock',
+                  onTap: locked ? null : () => pickDeadline(timeOnly: true),
+                ),
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 key: const Key('remaining'),
                 controller: remaining,
+                enabled: !locked,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Sisa pengerjaan (menit)',
+                decoration: InputDecoration(
+                  labelText: 'Sisa pekerjaan (menit) *',
+                  helperText: widget.taskId == null
+                      ? 'Bilangan bulat ≥ 1. Bukan durasi yang sudah dikerjakan.'
+                      : 'Bilangan bulat ≥ 0. Isi 0 jika tugas selesai.',
                 ),
                 validator: (v) {
                   final n = int.tryParse(v ?? '');
@@ -122,35 +169,41 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: p.isPending ? null : pickDeadline,
-                icon: const Icon(Icons.event),
-                label: Text('Tenggat: ${dateTimeLabel(deadline)}'),
-              ),
-              ErrorNotice(p.error),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: p.isPending
-                    ? null
-                    : () async {
-                        if (!form.currentState!.validate()) return;
-                        final ok = await p.saveTask(
-                          id: widget.taskId,
-                          title: title.text,
-                          course: course.text.trim().isEmpty
-                              ? null
-                              : course.text.trim(),
-                          deadline: deadline,
-                          remaining: int.parse(remaining.text),
-                          expectedRevision: revision,
-                        );
-                        if (ok && context.mounted) Navigator.pop(context);
-                      },
-                child: Text(p.isPending ? 'Menyimpan…' : 'Simpan tugas'),
-              ),
-              TextButton(
-                onPressed: p.isPending ? null : () => Navigator.pop(context),
-                child: const Text('Batal'),
+              if (p.isPending)
+                const Notice(
+                  title: 'Sedang menyimpan',
+                  message:
+                      'Jangan kirim ulang. Keberhasilan belum dikonfirmasi.',
+                )
+              else if (unknown) ...[
+                const Notice(
+                  title: 'Hasil simpan belum pasti',
+                  message:
+                      'Isian tetap ada. Periksa daftar tugas terbaru sebelum mengirim ulang agar tidak membuat tugas ganda.',
+                ),
+                AppButton(
+                  label: 'Periksa daftar tugas',
+                  secondary: true,
+                  onPressed: locked
+                      ? null
+                      : () async {
+                          final ok = await p.fetchSnapshot();
+                          if (ok && !p.isOfflineSnapshot && context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                ),
+              ] else if (p.error != null)
+                ErrorNotice(p.error)
+              else
+                const Notice(
+                  title: 'Jadwal tidak berubah otomatis',
+                  message:
+                      'Setelah mengubah tugas, hitung pratinjau dan konfirmasi untuk mengganti sesi rencana.',
+                ),
+              const Text(
+                '* Wajib diisi · semua waktu menggunakan WIB.',
+                style: TextStyle(fontSize: 12),
               ),
             ],
           ),

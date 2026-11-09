@@ -16,6 +16,7 @@ void main() {
     await tester.pumpWidget(WaktuTugasApp(auth: auth, planner: planner));
     await tester.pumpAndSettle();
     expect(find.text('Buka demo lokal'), findsOneWidget);
+    await tester.ensureVisible(find.text('Buka demo lokal'));
     await tester.tap(find.text('Buka demo lokal'));
     await tester.pumpAndSettle();
     for (final label in ['Tugas', 'Waktu', 'Jadwal', 'Ringkasan']) {

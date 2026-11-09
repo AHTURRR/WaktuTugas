@@ -9,6 +9,7 @@ import '../features/schedule/schedule_screen.dart';
 import '../features/schedule/preview_screen.dart';
 import '../features/schedule/session_screen.dart';
 import '../features/shared.dart';
+import '../features/auth/account_screen.dart';
 import '../state/auth_controller.dart';
 import '../state/planner_controller.dart';
 
@@ -37,12 +38,23 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => Scaffold(
           appBar: AppBar(
-            title: const Text('WaktuTugas'),
+            title: Text(
+              [
+                'WaktuTugas',
+                'Tugas',
+                'Waktu Anda',
+                'Jadwal',
+              ][shell.currentIndex],
+            ),
             actions: [
               IconButton(
-                onPressed: auth.logout,
-                tooltip: 'Keluar demo',
-                icon: const Icon(Icons.logout),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => AccountScreen(auth: auth),
+                  ),
+                ),
+                tooltip: 'Akun Anda',
+                icon: const DesignIcon('imgUserCircle'),
               ),
             ],
           ),
@@ -50,42 +62,94 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
             children: [
               ListenableBuilder(
                 listenable: planner,
-                builder: (c, _) => Container(
-                  width: double.infinity,
-                  color: Theme.of(c).colorScheme.secondaryContainer,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                  child: Text(
-                    'Demo lokal • ${dateTimeLabel(planner.now)}\nData contoh hanya tersimpan selama aplikasi terbuka.',
-                  ),
+                builder: (c, _) => planner.isOfflineSnapshot
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Notice(
+                              title: 'Luring · hanya baca',
+                              message:
+                                  'Cache akun yang sama. ${planner.fetchedAt == null ? '' : 'Pembaruan terakhir: ${dateTimeLabel(planner.fetchedAt!)}'}',
+                            ),
+                            TextButton(
+                              onPressed: planner.isPending
+                                  ? null
+                                  : () => planner.fetchSnapshot(
+                                      userId: auth.userId,
+                                    ),
+                              child: const Text('Coba sambungkan lagi'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : planner.isPending
+                    ? const LinearProgressIndicator(
+                        semanticsLabel: 'Sedang memuat…',
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              Expanded(
+                child: ListenableBuilder(
+                  listenable: planner,
+                  builder: (context, _) {
+                    final loading = planner.isApiBacked && planner.isPending;
+                    return Stack(
+                      children: [
+                        Offstage(offstage: loading, child: shell),
+                        if (loading)
+                          const PageContent(
+                            children: [
+                              PageHeading(
+                                'Menyiapkan ruang fokus',
+                                'Memuat tugas, waktu, dan jadwal untuk akun Anda.',
+                              ),
+                              Notice(
+                                title: 'Sedang memuat…',
+                                message:
+                                    'Tunggu hingga data siap. Jadwal belum dihitung atau diubah.',
+                              ),
+                            ],
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
-              Expanded(child: shell),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: shell.currentIndex,
-            onDestinationSelected: (i) => shell.goBranch(i),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.space_dashboard_outlined),
-                label: 'Ringkasan',
+          bottomNavigationBar: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: Border.all(
+                width: 2,
+                color: Theme.of(context).colorScheme.outline,
               ),
-              NavigationDestination(
-                icon: Icon(Icons.checklist),
-                label: 'Tugas',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.access_time),
-                label: 'Waktu',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.calendar_month_outlined),
-                label: 'Jadwal',
-              ),
-            ],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: NavigationBar(
+              selectedIndex: shell.currentIndex,
+              onDestinationSelected: (i) => shell.goBranch(i),
+              destinations: const [
+                NavigationDestination(
+                  icon: DesignIcon('imgHome'),
+                  label: 'Ringkasan',
+                ),
+                NavigationDestination(
+                  icon: DesignIcon('imgNavigationCheckSquare'),
+                  label: 'Tugas',
+                ),
+                NavigationDestination(
+                  icon: DesignIcon('imgClock1'),
+                  label: 'Waktu',
+                ),
+                NavigationDestination(
+                  icon: DesignIcon('imgCalendar'),
+                  label: 'Jadwal',
+                ),
+              ],
+            ),
           ),
         ),
         branches: [

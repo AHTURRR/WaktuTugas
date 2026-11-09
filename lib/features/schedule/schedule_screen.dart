@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../planner/models.dart';
+import '../../app/theme.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
 
@@ -22,22 +22,47 @@ class ScheduleScreen extends StatelessWidget {
       String? lastDate;
       return PageContent(
         children: [
-          const PageHeading(
-            'Jadwal pengerjaan',
-            'Pratinjau dahulu. Konfirmasi jika sudah sesuai.',
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              StatusBadge(
+                sessions.isEmpty
+                    ? 'Belum ada jadwal'
+                    : planner.needsReschedule
+                    ? 'Perlu ditinjau'
+                    : 'Terkonfirmasi',
+                icon: 'imgCheckCircle',
+              ),
+              const Text('Semua jam WIB'),
+            ],
           ),
+          const SizedBox(height: 16),
           if (missingPreview)
             const ErrorNotice('Hitung pratinjau terlebih dahulu.'),
           if (planner.hasStartedPlanned)
-            const ErrorNotice(
-              'Tutup progres sesi yang sudah mulai sebelum menyusun ulang.',
+            const Notice(
+              title: 'Catat progres dahulu',
+              message:
+                  'Tutup progres sesi yang sudah mulai sebelum menyusun ulang.',
+              color: AppColors.warning,
+              icon: 'imgAlertCircle',
             ),
           if (planner.needsReschedule)
-            ErrorNotice(
-              'Data berubah. Jadwal perlu disusun ulang. ${invalid.length} sesi mendatang tidak sesuai data terbaru.',
+            Notice(
+              title: 'Jadwal perlu ditinjau',
+              message:
+                  'Data berubah. ${invalid.length} sesi mendatang tidak sesuai data terbaru.',
+              color: AppColors.warning,
             ),
-          FilledButton.icon(
-            onPressed: planner.isPending || planner.hasStartedPlanned
+          AppButton(
+            label: planner.isPending ? 'Menghitung…' : 'Hitung pratinjau',
+            icon: 'imgRefreshCw',
+            onPressed:
+                planner.isPending ||
+                    planner.hasStartedPlanned ||
+                    planner.isOfflineSnapshot
                 ? null
                 : () async {
                     final ok = await planner.generatePreview();
@@ -45,53 +70,49 @@ class ScheduleScreen extends StatelessWidget {
                       context.push('/schedule/preview');
                     }
                   },
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: Text(planner.isPending ? 'Menghitung…' : 'Hitung pratinjau'),
           ),
           ErrorNotice(planner.error),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: planner.isPending ? null : planner.advanceDemoClock,
-            child: const Text('Majukan jam demo ke sesi berikutnya'),
-          ),
-          const Text(
-            'Kontrol demo lokal untuk mencoba progres. Waktu tidak mengikuti jam perangkat.',
-          ),
-          const SizedBox(height: 20),
+          if (!planner.isApiBacked) ...[
+            const SizedBox(height: 12),
+            Notice(
+              title: 'Demo lokal · ${dateTimeLabel(planner.now)}',
+              message: 'Waktu contoh tidak mengikuti jam perangkat.',
+              color: AppColors.warning,
+            ),
+            AppButton(
+              label: 'Majukan jam demo ke sesi berikutnya',
+              secondary: true,
+              onPressed: planner.isPending ? null : planner.advanceDemoClock,
+            ),
+          ],
+          const SizedBox(height: 16),
           if (sessions.isEmpty)
-            const Text(
-              'Belum ada jadwal terkonfirmasi. Hasil pratinjau belum menjadi jadwal tersimpan.',
+            const EmptyState(
+              title: 'Belum ada jadwal terkonfirmasi',
+              message:
+                  'Hitung pratinjau dari tugas dan waktu yang diizinkan, lalu konfirmasi. Hasil pratinjau belum menjadi jadwal tersimpan.',
             ),
           for (final s in sessions) ...[
             if (lastDate != dateLabel(s.startsAt))
               Padding(
-                padding: const EdgeInsets.only(top: 16, bottom: 8),
+                padding: const EdgeInsets.only(top: 8, bottom: 12),
                 child: Text(
                   lastDate = dateLabel(s.startsAt),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-            Card(
-              child: ListTile(
-                key: Key('session-${s.id}'),
-                title: Text(planner.taskById(s.taskId)!.title),
-                subtitle: Text(
-                  '${dateTimeLabel(s.startsAt)}\nSampai ${dateTimeLabel(s.endsAt)}\n${statusLabel(s.status)}${invalid.contains(s.id) ? ' • Perlu disusun ulang' : ''}',
-                ),
-                leading: Icon(
-                  s.status == SessionStatus.completed
-                      ? Icons.check_circle_outline
-                      : s.status == SessionStatus.missed
-                      ? Icons.event_busy
-                      : s.status == SessionStatus.cancelled
-                      ? Icons.cancel_outlined
-                      : Icons.schedule,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/session/${s.id}'),
-              ),
+            SessionCard(
+              key: Key('session-${s.id}'),
+              session: s,
+              title: planner.taskById(s.taskId)?.title ?? s.taskId,
+              invalid: invalid.contains(s.id),
+              onTap: () => context.push('/session/${s.id}'),
             ),
           ],
+          const Text(
+            'Konfirmasi baru hanya mengganti sesi rencana mendatang. Riwayat selesai dan terlewat tetap ada.',
+            style: TextStyle(fontSize: 12),
+          ),
         ],
       );
     },

@@ -56,6 +56,7 @@ void main() {
     final p = PlannerController();
     await boot(t, p);
     await tab(t, 'Waktu');
+    await t.ensureVisible(find.text('Tambah kegiatan'));
     await t.tap(find.text('Tambah kegiatan'));
     await t.pumpAndSettle();
     await t.tap(find.byType(DropdownButtonFormField<ActivityKind>));
@@ -163,6 +164,8 @@ void main() {
     await t.tap(find.text('Majukan jam demo ke sesi berikutnya'));
     await t.pumpAndSettle();
     await t.tap(find.byKey(Key('session-${p.snapshot.sessions.first.id}')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Selesai dikerjakan'));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('remaining-after')), '90');
     await t.tap(find.text('Simpan progres'));

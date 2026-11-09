@@ -24,7 +24,9 @@ class _WaktuTugasAppState extends State<WaktuTugasApp> {
   }
 
   void _sessionChanged() {
-    if (widget.auth.signedIn) {
+    if (widget.auth.signedIn && widget.planner.isApiBacked) {
+      widget.planner.fetchSnapshot(userId: widget.auth.userId);
+    } else if (widget.auth.signedIn) {
       widget.planner.resetDemo();
     } else {
       widget.planner.clear();

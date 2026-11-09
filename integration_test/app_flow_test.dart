@@ -10,6 +10,7 @@ void main() {
   ) async {
     app.main();
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Buka demo lokal'));
     await tester.tap(find.text('Buka demo lokal'));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -35,6 +36,8 @@ void main() {
     final session = find.byKey(const Key('session-1-0'));
     await tester.ensureVisible(session);
     await tester.tap(session);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Selesai dikerjakan'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('remaining-after')), '90');
     await tester.testTextInput.receiveAction(TextInputAction.done);
