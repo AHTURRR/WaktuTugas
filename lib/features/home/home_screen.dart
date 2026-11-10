@@ -8,177 +8,204 @@ import '../shared.dart';
 class HomeScreen extends StatelessWidget {
   final PlannerController planner;
   const HomeScreen({super.key, required this.planner});
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: planner,
     builder: (context, _) {
       final tasks = planner.snapshot.tasks;
-      final today = planner.snapshot.sessions.where(
-        (s) =>
-            s.status != SessionStatus.cancelled &&
-            dateLabel(s.startsAt) == dateLabel(planner.now),
-      );
-      final late = tasks.where(
-        (t) => t.remainingMinutes > 0 && !t.deadlineAt.isAfter(planner.now),
-      );
-      Widget metric(String value, String label, Color color) => PaperCard(
-        color: color,
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 32,
-                height: 1.25,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-      );
+      final active = tasks.where((t) => t.remainingMinutes > 0).toList()
+        ..sort((a, b) => a.deadlineAt.compareTo(b.deadlineAt));
+      final late = active.where((t) => !t.deadlineAt.isAfter(planner.now));
+      final sessions =
+          planner.snapshot.sessions
+              .where((s) => s.status == SessionStatus.planned)
+              .toList()
+            ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      final next = sessions.firstOrNull;
+      final started = next != null && !next.startsAt.isAfter(planner.now);
+      final today =
+          planner.snapshot.sessions
+              .where(
+                (s) =>
+                    s.status != SessionStatus.cancelled &&
+                    dateLabel(s.startsAt) == dateLabel(planner.now),
+              )
+              .toList()
+            ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      final locked = planner.isPending || planner.isOfflineSnapshot;
       return PageContent(
         children: [
-          Text(dateLabel(planner.now), style: const TextStyle(fontSize: 13)),
-          const SizedBox(height: 14),
-          Text(
-            'Ruang untuk fokus',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 14),
-          Container(
-            height: 128,
-            margin: const EdgeInsets.only(bottom: 14),
-            decoration: BoxDecoration(
-              color: AppColors.cyan,
-              border: Border.all(width: 2, color: AppColors.ink),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          FocusPanel(
+            eyebrow: dateLabel(planner.now),
+            title: started
+                ? 'Saatnya catat\nlangkah Anda.'
+                : 'Beri ruang\nuntuk fokus.',
+            description:
+                '${active.length} tugas aktif \u00b7 ${active.fold(0, (int n, t) => n + t.remainingMinutes)} menit tersisa',
+            footer: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                StudyIllustration(),
-                SizedBox(width: 32),
-                DesignIcon('imgWaktuTugasIllustrationSparkle', size: 28),
+                if (next != null) ...[
+                  const Divider(color: AppColors.onForest, height: 1),
+                  const SizedBox(height: 16),
+                  Text(
+                    started ? 'SESI PERLU DICATAT' : 'SESI BERIKUTNYA',
+                    style: const TextStyle(
+                      color: AppColors.lime,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    planner.taskById(next.taskId)?.title ?? next.taskId,
+                    style: const TextStyle(
+                      color: AppColors.surface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${dateLabel(next.startsAt)}\n${clockLabel(next.startsAt)} \u2013 ${clockLabel(next.endsAt)} WIB',
+                    style: const TextStyle(
+                      color: AppColors.onForest,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  AppButton(
+                    label: started
+                        ? 'Catat progres sesi'
+                        : 'Buka sesi berikutnya',
+                    highlighted: true,
+                    icon: started ? 'imgCheckCircle' : 'imgArrowRight',
+                    onPressed: started && locked
+                        ? null
+                        : () => context.push('/session/${next.id}'),
+                  ),
+                ] else if (tasks.isEmpty)
+                  AppButton(
+                    label: 'Tambah tugas',
+                    highlighted: true,
+                    icon: 'imgPlus',
+                    onPressed: locked ? null : () => context.push('/task/new'),
+                  )
+                else
+                  AppButton(
+                    label: 'Tinjau jadwal',
+                    highlighted: true,
+                    icon: 'imgArrowRight',
+                    onPressed: () => context.go('/schedule'),
+                  ),
               ],
             ),
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: metric(
-                  '${tasks.where((t) => t.remainingMinutes > 0).length}',
-                  'tugas aktif',
-                  AppColors.cyan,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: metric(
-                  '${tasks.fold(0, (int n, t) => n + t.remainingMinutes)}',
-                  'menit tersisa',
-                  AppColors.lilac,
-                ),
-              ),
-            ],
-          ),
-          if (tasks.isEmpty)
-            EmptyState(
-              title: 'Mulai dari satu tugas',
+          if (planner.needsReschedule) ...[
+            const SizedBox(height: 16),
+            const Notice(
+              title: 'Jadwal perlu diperbarui',
               message:
-                  'Tambahkan tugas dan waktu yang boleh digunakan. Waktu kosong tidak otomatis menjadi waktu belajar.',
-              action: AppButton(
-                label: 'Tambah tugas',
-                icon: 'imgPlus',
-                onPressed: planner.isOfflineSnapshot
-                    ? null
-                    : () => context.push('/task/new'),
-              ),
-            )
-          else
-            AppButton(
-              label: 'Tinjau jadwal',
-              icon: 'imgCalendarAction',
-              onPressed: () => context.go('/schedule'),
+                  'Data berubah. Tinjau jadwal sebelum mulai sesi berikutnya.',
+              color: AppColors.warning,
+              icon: 'imgAlertCircle',
             ),
+          ],
           if (tasks.isEmpty)
             TextButton(
               onPressed: () => context.go('/time'),
               child: const Text('Atur waktu yang diizinkan'),
             ),
-          const SizedBox(height: 14),
-          if (planner.hasStartedPlanned) ...[
-            const Notice(
-              title: 'Jadwal perlu diperbarui',
-              message:
-                  'Ada sesi yang sudah mulai. Catat progres sebelum menyusun ulang.',
-              color: AppColors.warning,
-              icon: 'imgAlertCircle',
-            ),
-            AppButton(
-              label: 'Catat progres sesi',
-              onPressed: () => context.push(
-                '/session/${planner.snapshot.sessions.firstWhere((s) => s.status == SessionStatus.planned && !s.startsAt.isAfter(planner.now)).id}',
-              ),
-            ),
-          ] else if (planner.needsReschedule)
-            const Notice(
-              title: 'Jadwal perlu diperbarui',
-              message: 'Data berubah. Jadwal perlu ditinjau dan disusun ulang.',
-              color: AppColors.warning,
-            ),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Sesi hari ini',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              TextButton(
-                onPressed: () => context.go('/schedule'),
-                child: const Text('Lihat semua'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (today.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Belum ada sesi terkonfirmasi hari ini.'),
-            ),
-          for (final s in today)
-            SessionCard(
-              session: s,
-              title: planner.taskById(s.taskId)?.title ?? s.taskId,
-              onTap: () => context.push('/session/${s.id}'),
-            ),
+          ErrorNotice(planner.error),
           if (late.isNotEmpty) ...[
-            Text(
-              'Tugas terlambat',
-              style: Theme.of(context).textTheme.titleLarge,
+            const SizedBox(height: 24),
+            const SectionHeader(
+              title: 'Tugas terlambat',
+              subtitle: 'Perbarui tenggat dan estimasi pengerjaan.',
             ),
-            for (final t in late)
+            for (final task in late)
               ListTile(
-                title: Text(t.title),
-                subtitle: Text('${t.remainingMinutes} menit tersisa'),
-                onTap: () => context.push('/task/${t.id}'),
+                contentPadding: EdgeInsets.zero,
+                leading: const DesignIcon(
+                  'imgAlertCircle',
+                  color: AppColors.error,
+                ),
+                title: Text(task.title),
+                subtitle: Text(
+                  'Terlambat \u00b7 ${task.remainingMinutes} menit tersisa',
+                ),
+                trailing: const DesignIcon('imgChevronRight'),
+                onTap: () => context.push('/task/${task.id}'),
               ),
+          ],
+          const SizedBox(height: 8),
+          SectionHeader(
+            title: 'Agenda hari ini',
+            trailing: TextButton(
+              onPressed: () => context.go('/schedule'),
+              child: const Text('Lihat semua'),
+            ),
+          ),
+          if (today.isEmpty)
+            const PaperCard(
+              color: AppColors.primarySoft,
+              child: Row(
+                children: [
+                  DesignIcon('imgCalendar', color: AppColors.primary),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Belum ada sesi terkonfirmasi hari ini.',
+                      style: TextStyle(color: AppColors.inkSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          for (final session in today)
+            SessionCard(
+              session: session,
+              title: planner.taskById(session.taskId)?.title ?? session.taskId,
+              onTap: () => context.push('/session/${session.id}'),
+            ),
+          if (active.any((t) => t.deadlineAt.isAfter(planner.now))) ...[
+            const SizedBox(height: 24),
+            const SectionHeader(title: 'Jangan lewatkan tenggat'),
+            for (final task
+                in active
+                    .where((t) => t.deadlineAt.isAfter(planner.now))
+                    .take(3)) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  task.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${dateTimeLabel(task.deadlineAt)}\n${task.remainingMinutes} menit tersisa',
+                  ),
+                ),
+                trailing: const DesignIcon('imgChevronRight', size: 20),
+                onTap: () => context.push('/task/${task.id}'),
+              ),
+              const Divider(height: 16),
+            ],
           ],
           if (planner.preview != null &&
               planner.preview!.unallocated.isNotEmpty)
             Notice(
-              title: 'Pratinjau terakhir · belum disimpan',
+              title: 'Pratinjau terakhir \u00b7 belum disimpan',
               color: AppColors.warning,
               icon: 'imgAlertCircle',
               message: planner.preview!.unallocated
                   .map(
                     (u) =>
-                        '${planner.taskById(u.taskId)?.title ?? u.taskId}: ${u.minutes} menit belum tertampung · ${u.reason.label}',
+                        '${planner.taskById(u.taskId)?.title ?? u.taskId}: ${u.minutes} menit belum tertampung',
                   )
                   .join('\n'),
             ),

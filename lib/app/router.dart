@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'theme.dart';
 import '../features/auth/login_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/tasks/tasks_screen.dart';
@@ -38,23 +39,42 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => Scaffold(
           appBar: AppBar(
-            title: Text(
-              [
-                'WaktuTugas',
-                'Tugas',
-                'Waktu Anda',
-                'Jadwal',
-              ][shell.currentIndex],
-            ),
-            actions: [
-              IconButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => AccountScreen(auth: auth),
+            title: const Row(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.forest,
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: DesignIcon(
+                      'imgClock1',
+                      size: 20,
+                      color: AppColors.lime,
+                    ),
                   ),
                 ),
-                tooltip: 'Akun Anda',
-                icon: const DesignIcon('imgUserCircle'),
+                SizedBox(width: 10),
+                Text('WaktuTugas'),
+              ],
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AccountScreen(auth: auth),
+                    ),
+                  ),
+                  tooltip: 'Akun Anda',
+                  icon: const DesignIcon(
+                    'imgUserCircle',
+                    size: 22,
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
               ),
             ],
           ),
@@ -64,7 +84,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
                 listenable: planner,
                 builder: (c, _) => planner.isOfflineSnapshot
                     ? Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -72,20 +92,27 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
                               title: 'Luring · hanya baca',
                               message:
                                   'Cache akun yang sama. ${planner.fetchedAt == null ? '' : 'Pembaruan terakhir: ${dateTimeLabel(planner.fetchedAt!)}'}',
+                              color: AppColors.warning,
+                              icon: 'imgAlertCircle',
                             ),
-                            TextButton(
-                              onPressed: planner.isPending
-                                  ? null
-                                  : () => planner.fetchSnapshot(
-                                      userId: auth.userId,
-                                    ),
-                              child: const Text('Coba sambungkan lagi'),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: planner.isPending
+                                    ? null
+                                    : () => planner.fetchSnapshot(
+                                        userId: auth.userId,
+                                      ),
+                                child: const Text('Coba sambungkan lagi'),
+                              ),
                             ),
                           ],
                         ),
                       )
                     : planner.isPending
                     ? const LinearProgressIndicator(
+                        color: AppColors.primary,
+                        backgroundColor: AppColors.primarySoft,
                         semanticsLabel: 'Sedang memuat…',
                       )
                     : const SizedBox.shrink(),
@@ -105,6 +132,7 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
                                 'Menyiapkan ruang fokus',
                                 'Memuat tugas, waktu, dan jadwal untuk akun Anda.',
                               ),
+                              SizedBox(height: 16),
                               Notice(
                                 title: 'Sedang memuat…',
                                 message:
@@ -119,36 +147,54 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
               ),
             ],
           ),
-          bottomNavigationBar: DecoratedBox(
-            position: DecorationPosition.foreground,
-            decoration: BoxDecoration(
-              border: Border.all(
-                width: 2,
-                color: Theme.of(context).colorScheme.outline,
+          bottomNavigationBar: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: NavigationBar(
+                animationDuration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                selectedIndex: shell.currentIndex,
+                onDestinationSelected: (i) => shell.goBranch(i),
+                destinations: const [
+                  NavigationDestination(
+                    icon: DesignIcon('imgHome', color: AppColors.onForest),
+                    selectedIcon: DesignIcon(
+                      'imgHome',
+                      color: AppColors.forest,
+                    ),
+                    label: 'Ringkasan',
+                  ),
+                  NavigationDestination(
+                    icon: DesignIcon(
+                      'imgNavigationCheckSquare',
+                      color: AppColors.onForest,
+                    ),
+                    selectedIcon: DesignIcon(
+                      'imgNavigationCheckSquare',
+                      color: AppColors.forest,
+                    ),
+                    label: 'Tugas',
+                  ),
+                  NavigationDestination(
+                    icon: DesignIcon('imgClock1', color: AppColors.onForest),
+                    selectedIcon: DesignIcon(
+                      'imgClock1',
+                      color: AppColors.forest,
+                    ),
+                    label: 'Waktu',
+                  ),
+                  NavigationDestination(
+                    icon: DesignIcon('imgCalendar', color: AppColors.onForest),
+                    selectedIcon: DesignIcon(
+                      'imgCalendar',
+                      color: AppColors.forest,
+                    ),
+                    label: 'Jadwal',
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: NavigationBar(
-              selectedIndex: shell.currentIndex,
-              onDestinationSelected: (i) => shell.goBranch(i),
-              destinations: const [
-                NavigationDestination(
-                  icon: DesignIcon('imgHome'),
-                  label: 'Ringkasan',
-                ),
-                NavigationDestination(
-                  icon: DesignIcon('imgNavigationCheckSquare'),
-                  label: 'Tugas',
-                ),
-                NavigationDestination(
-                  icon: DesignIcon('imgClock1'),
-                  label: 'Waktu',
-                ),
-                NavigationDestination(
-                  icon: DesignIcon('imgCalendar'),
-                  label: 'Jadwal',
-                ),
-              ],
             ),
           ),
         ),

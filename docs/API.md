@@ -17,13 +17,16 @@ Nama argumen aktual pada migrasi menggunakan awalan `p_` untuk menghindari ambig
 
 ## 2. Pemetaan Kode Error (Error Codes)
 
-| Kode Error | SQLSTATE | Deskripsi | Tindakan Klien (Frontend) |
+| Kode Error | SQLSTATE / Sumber | Deskripsi | Tindakan Klien (Frontend) |
 | :--- | :--- | :--- | :--- |
-| `UNAUTHENTICATED` | `P0001` | Sesi login tidak ditemukan atau kedaluwarsa | Arahkan pengguna ke layar `/login` |
-| `STALE_REVISION` | `P0002` | `expected_revision` tidak cocok dengan revisi server | Tampilkan peringatan, muat ulang snapshot, dan hitung pratinjau baru |
-| `VALIDATION_ERROR` | `P0003` | Validasi input gagal (nama kosong, rentang terbalik, dll.) | Tampilkan pesan error spesifik dekat field formulir |
-| `NOT_FOUND` | `P0004` | Data entitas tidak ditemukan atau bukan milik akun ini | Tampilkan pesan bahwa data telah dihapus |
-| `SESSION_ALREADY_CLOSED` | `P0005` | Sesi belajar sudah ditutup sebelumnya | Kunci tombol aksi progres dan refresh state |
+| `UNAUTHENTICATED` | `P0001` / `401` / `PGRST301` | Sesi login tidak ditemukan atau kedaluwarsa | Bersihkan state akun dan arahkan ke `/login` |
+| `FORBIDDEN` | `42501` / `403` | Akses langsung tabel atau fungsi ditolak | Tampilkan pesan penolakan akses tanpa membocorkan skema |
+| `STALE_REVISION` | `P0002` | `expected_revision` / `input_revision` tidak cocok dengan revisi server | Muat ulang snapshot terbaru dari server dan minta pratinjau dihitung ulang |
+| `VALIDATION_ERROR` | `P0003` | Validasi input gagal (nama kosong, rentang terbalik, sesi masa lalu, dll.) | Tampilkan pesan error spesifik pada formulir dan pertahankan isian |
+| `NOT_FOUND` | `P0004` | Data entitas tidak ditemukan atau bukan milik akun ini | Tampilkan pesan bahwa data tidak ditemukan pada akun pengguna |
+| `SESSION_ALREADY_CLOSED` | `P0005` | Sesi belajar sudah ditutup sebelumnya (`completed`/`missed`/`cancelled`) | Tolak penutupan ulang tanpa mengurangi sisa tugas dua kali |
+| `TIMEOUT` | `TimeoutException` (15 detik) | Status hasil mutasi di server belum diketahui | Jangan retry otomatis; muat ulang snapshot server sebelum mengirim ulang |
+| `INVALID_RESPONSE` | `FormatException` / `TypeError` | Respons server tidak sesuai kontrak JSON/tipe | Tampilkan pesan gangguan format layanan dan pertahankan state aman |
 
 ---
 
@@ -87,23 +90,23 @@ Membaca seluruh data pengguna (tugas, waktu luang, kegiatan, dan sesi) beserta r
 Menambah tugas baru atau memperbarui tugas yang ada.
 * **Metode:** `POST /rest/v1/rpc/save_task`
 * **Argumen:**
-  * `task_id` (`uuid`, nullable): `null` untuk tugas baru, UUID untuk edit.
-  * `title` (`text`, required): 1–120 karakter.
-  * `course` (`text`, nullable): Maksimal 100 karakter.
-  * `deadline_at` (`timestamptz`, required): Waktu tenggat pengumpulan.
-  * `remaining_minutes` (`integer`, required): Sisa estimasi pengerjaan ($\ge 0$).
-  * `expected_revision` (`bigint`, required): Revisi lokal saat ini.
+  * `p_task_id` (`uuid`, nullable): `null` untuk tugas baru, UUID untuk edit.
+  * `p_title` (`text`, required): 1–120 karakter setelah `trim`.
+  * `p_course` (`text`, nullable): Maksimal 100 karakter setelah `trim`.
+  * `p_deadline_at` (`timestamptz`, required): Waktu tenggat pengumpulan (`isfinite`).
+  * `p_remaining_minutes` (`integer`, required): Sisa estimasi pengerjaan ($> 0$ untuk tugas baru, $\ge 0$ untuk tugas yang sudah ada).
+  * `p_expected_revision` (`bigint`, required): Revisi lokal saat ini.
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
 
 ### 3.3 `delete_task`
-Menghapus tugas dan seluruh sesi terkait.
+Menghapus tugas dan seluruh sesi terkait (`ON DELETE CASCADE`).
 * **Metode:** `POST /rest/v1/rpc/delete_task`
 * **Argumen:**
-  * `task_id` (`uuid`, required): ID tugas yang akan dihapus.
-  * `confirm_delete` (`boolean`, required): Harus bernilai `true`.
-  * `expected_revision` (`bigint`, required): Revisi lokal saat ini.
+  * `p_task_id` (`uuid`, required): ID tugas yang akan dihapus.
+  * `p_confirm_delete` (`boolean`, required): Harus bernilai `true`.
+  * `p_expected_revision` (`bigint`, required): Revisi lokal saat ini.
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
@@ -112,13 +115,13 @@ Menghapus tugas dan seluruh sesi terkait.
 Menambah atau memperbarui rentang waktu luang yang diizinkan.
 * **Metode:** `POST /rest/v1/rpc/save_time_window`
 * **Argumen:**
-  * `id` (`uuid`, nullable): `null` untuk baru, UUID untuk edit.
-  * `weekday` (`smallint`, nullable): 1–7 (Senin–Minggu).
-  * `date` (`date`, nullable): Tanggal spesifik (`YYYY-MM-DD`).
-  * `start_minute` (`integer`, required): 0–1439.
-  * `end_minute` (`integer`, required): 1–1440 (`end > start`).
-  * `expected_revision` (`bigint`, required): Revisi lokal.
-* *Catatan:* Tepat satu dari `weekday` atau `date` harus diisi.
+  * `p_id` (`uuid`, nullable): `null` untuk baru, UUID untuk edit.
+  * `p_weekday` (`smallint`, nullable): 1–7 (Senin–Minggu).
+  * `p_date` (`date`, nullable): Tanggal spesifik (`YYYY-MM-DD`).
+  * `p_start_minute` (`integer`, required): 0–1439.
+  * `p_end_minute` (`integer`, required): 1–1440 (`end > start`).
+  * `p_expected_revision` (`bigint`, required): Revisi lokal.
+* *Catatan:* Tepat satu dari `p_weekday` atau `p_date` harus diisi.
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
@@ -126,7 +129,7 @@ Menambah atau memperbarui rentang waktu luang yang diizinkan.
 ### 3.5 `delete_time_window`
 Menghapus rentang waktu luang.
 * **Metode:** `POST /rest/v1/rpc/delete_time_window`
-* **Argumen:** `id` (`uuid`), `expected_revision` (`bigint`).
+* **Argumen:** `p_id` (`uuid`), `p_expected_revision` (`bigint`).
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
@@ -135,14 +138,14 @@ Menghapus rentang waktu luang.
 Menambah atau memperbarui kegiatan (rutinitas, acara sekali, atau blokir waktu).
 * **Metode:** `POST /rest/v1/rpc/save_activity`
 * **Argumen:**
-  * `id` (`uuid`, nullable): `null` untuk baru, UUID untuk edit.
-  * `kind` (`text`, required): `'routine'`, `'event'`, atau `'blocked'`.
-  * `label` (`text`, required): Maksimal 120 karakter.
-  * `weekday` (`smallint`, nullable): Diisi jika `kind = 'routine'`.
-  * `date` (`date`, nullable): Diisi jika `kind IN ('event', 'blocked')`.
-  * `start_minute` (`integer`, required): 0–1439.
-  * `end_minute` (`integer`, required): 1–1440 (`end > start`).
-  * `expected_revision` (`bigint`, required): Revisi lokal.
+  * `p_id` (`uuid`, nullable): `null` untuk baru, UUID untuk edit.
+  * `p_kind` (`text`, required): `'routine'`, `'event'`, atau `'blocked'`.
+  * `p_label` (`text`, required): 0–120 karakter setelah `trim` (tidak boleh `null`).
+  * `p_weekday` (`smallint`, nullable): Diisi jika `p_kind = 'routine'`.
+  * `p_date` (`date`, nullable): Diisi jika `p_kind IN ('event', 'blocked')`.
+  * `p_start_minute` (`integer`, required): 0–1439.
+  * `p_end_minute` (`integer`, required): 1–1440 (`end > start`).
+  * `p_expected_revision` (`bigint`, required): Revisi lokal.
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
@@ -150,19 +153,19 @@ Menambah atau memperbarui kegiatan (rutinitas, acara sekali, atau blokir waktu).
 ### 3.7 `delete_activity`
 Menghapus kegiatan atau penutupan waktu.
 * **Metode:** `POST /rest/v1/rpc/delete_activity`
-* **Argumen:** `id` (`uuid`), `expected_revision` (`bigint`).
+* **Argumen:** `p_id` (`uuid`), `p_expected_revision` (`bigint`).
 * **Respons:** `bigint` (Revisi baru server).
 
 ---
 
 ### 3.8 `record_progress`
-Mencatat progres penyelesaian sesi belajar yang telah dimulai/berlalu.
+Mencatat progres penyelesaian sesi belajar yang telah dimulai/berlalu menurut waktu server.
 * **Metode:** `POST /rest/v1/rpc/record_progress`
 * **Argumen:**
-  * `session_id` (`uuid`, required): ID sesi yang ditutup.
-  * `status` (`text`, required): `'completed'` atau `'missed'`.
-  * `remaining_after` (`integer`, nullable): Sisa durasi tugas setelah sesi (wajib $\ge 0$ jika `completed`, `null` jika `missed`).
-  * `expected_revision` (`bigint`, required): Revisi lokal.
+  * `p_session_id` (`uuid`, required): ID sesi yang ditutup.
+  * `p_status` (`text`, required): `'completed'` atau `'missed'`.
+  * `p_remaining_after` (`integer`, nullable): Sisa durasi tugas setelah sesi (wajib $\ge 0$ jika `completed`, wajib `null` jika `missed`).
+  * `p_expected_revision` (`bigint`, required): Revisi lokal.
 * **Respons:** `bigint` (Revisi baru server).
 
 ---

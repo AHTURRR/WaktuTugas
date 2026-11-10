@@ -255,4 +255,43 @@ void main() {
     );
     expect(expandWindows(s, demoNow).fold(0, (int n, v) => n + v.minutes), 180);
   });
+  test('buildPreview completes within 1000ms for 50 tasks across 14 dates', () {
+    final tasks = [
+      for (var i = 0; i < 50; i++)
+        Task(
+          id: 'T-${i.toString().padLeft(2, '0')}',
+          title: 'Tugas kapasitas $i',
+          deadlineAt: demoNow.add(Duration(hours: 6 * (i + 1))),
+          remainingMinutes: 90,
+          createdAt: demoNow,
+        ),
+    ];
+    final windows = [
+      for (var d = 1; d <= 7; d++)
+        TimeWindow(id: 'W-$d', weekday: d, startMinute: 480, endMinute: 1320),
+    ];
+    final activities = [
+      for (var d = 1; d <= 5; d++)
+        Activity(
+          id: 'A-$d',
+          kind: ActivityKind.routine,
+          label: 'Kuliah $d',
+          weekday: d,
+          startMinute: 600,
+          endMinute: 780,
+        ),
+    ];
+    final input = PlannerSnapshot(
+      revision: 1,
+      tasks: tasks,
+      timeWindows: windows,
+      activities: activities,
+      sessions: [],
+    );
+    final watch = Stopwatch()..start();
+    final preview = buildPreview(input, demoNow);
+    watch.stop();
+    expect(preview.sessions, isNotEmpty);
+    expect(watch.elapsedMilliseconds, lessThanOrEqualTo(1000));
+  });
 }

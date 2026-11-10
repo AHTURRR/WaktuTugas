@@ -46,9 +46,11 @@ Status hanya dicentang bila ada bukti eksekusi pada backend/perangkat yang sesua
 
 | AC | Status | Bukti |
 |---|---|---|
-| AC01–AC02 | Belum diverifikasi | Supabase test terblokir Docker |
-| AC03–AC10 | Lulus lokal | Test planner terotomasi lulus |
-| AC11–AC18 | Belum diverifikasi | RPC/integration test belum dijalankan |
+| AC01–AC02 | Belum diverifikasi (Backend nyata terblokir Docker); Adapter teruji lokal | Uji unit `test/data/auth_storage_test.dart`, `test/data/planner_api_test.dart`, `test/data/cache_test.dart` lulus; uji PostgreSQL `supabase/tests/authorization.sql` terblokir Docker |
+| AC03–AC10 | Lulus lokal | Test planner & UI terotomasi lulus (`test/planner/`, `test/ui/`, termasuk uji performa 50 tugas / 14 tanggal < 1 detik) |
+| AC11–AC16 | Belum diverifikasi (Backend nyata terblokir Docker); Adapter & alur UI teruji lokal | Uji unit `test/data/planner_api_test.dart`, `test/ui/app_flow_test.dart` lulus; uji PostgreSQL `supabase/tests/transactions.sql` & `test/backend/planner_rpc_test.dart` terblokir Docker |
+| AC17 | Lulus lokal (FFI SQLite + adapter); Belum diverifikasi pada perangkat Android fisik | `test/data/cache_test.dart` dan `test/ui/app_flow_test.dart` lulus; `integration_test/storage_test.dart` membutuhkan target perangkat Android |
+| AC18 | Lulus lokal (`flutter analyze`, `flutter test`); Belum diverifikasi penuh pada backend hidup & perangkat Android | 50 test lokal (`test/planner`, `test/ui`, `test/data`) lulus, `flutter analyze --no-pub` 0 masalah, `flutter build apk --release` lulus |
 
 ## Task 4 continuation — 9 November 2026 (Asia/Jakarta)
 
@@ -94,3 +96,37 @@ Still blocked / not run:
 - Final `supabase test db`, migration application/SQL compilation, and all runtime owner-isolation/transaction assertions need a disposable local Supabase stack. No psql/pg_prove executable is available as an alternative. Static review is not a SQL test pass.
 - `flutter test --no-pub test/backend/planner_rpc_test.dart` was not run: there is no local backend and none of the required environment-variable names are present. It requires `SUPABASE_URL` (loopback only), `SUPABASE_PUBLISHABLE_KEY`, `WAKTUTUGAS_TEST_A_EMAIL`, `WAKTUTUGAS_TEST_A_PASSWORD`, `WAKTUTUGAS_TEST_B_EMAIL`, and `WAKTUTUGAS_TEST_B_PASSWORD`, supplied externally for existing empty test accounts; never commit their values.
 - No Android/device/build/cloud/cache checks were run in this Task 4 continuation. AC01/02/11–16/18 remain unverified on a real backend; AC17 and Tasks 5–6 are outside this continuation.
+
+## Task 5–6 Integration & Audit Completion — 9 November 2026 (Asia/Jakarta)
+
+Status: Integrasi frontend-backend, hardening keamanan/offline/isolasi akun, pengujian lokal (`test/planner`, `test/ui`, `test/data`), serta dokumentasi (`README.md`, `docs/API.md`, `docs/TEST_RESULTS.md`, `docs/PROGRESS.md`) selesai. Eksekusi langsung terhadap PostgreSQL/Supabase lokal dan perangkat Android tetap dipisahkan secara jujur karena prasyarat eksternal (Docker Engine dan perangkat Android/AVD) belum aktif pada mesin host.
+
+Perbaikan dari audit kode dan migrasi:
+- `supabase/config.toml`: Mengganti kunci konfigurasi usang `auth.email.enable_signup` menjadi `auth.email.enabled = true`.
+- `supabase/migrations/001_schema.sql` & `003_rpc.sql`: Memperbaiki batasan `activities.label` agar mengizinkan string kosong `''` (`char_length(label) <= 120`, bukan `BETWEEN 1 AND 120`) sesuai PRD Bagian 6 (`label text <=120`), `models.dart`, dan `TimeFormScreen` (`Label kegiatan (opsional)`). Menambahkan constraint invarian status sesi `sessions_status_fields` pada `001_schema.sql` dan urutan deterministik `ORDER BY` pada seluruh agregasi `get_planner_snapshot()` di `003_rpc.sql`.
+- `android/app/src/main/AndroidManifest.xml`: Menambahkan izin `<uses-permission android:name="android.permission.INTERNET"/>` serta menonaktifkan pencadangan otomatis (`android:allowBackup="false"`, `android:fullBackupContent="false"`) agar cache SQLite dan penyimpanan sesi tidak bocor ke backup cloud.
+- `lib/data/planner_api.dart`: Memperkuat pemetaan error PostgreSQL/PostgREST/Auth/jaringan (`VALIDATION`, `STALE_REVISION`, `UNAUTHENTICATED`, `FORBIDDEN`, `TIMEOUT`, `OFFLINE`, `INVALID_RESPONSE`, `SERVER`) beserta validasi payload revisi dan pesan pengguna berbahasa Indonesia yang aman.
+- `lib/state/auth_controller.dart` & `lib/data/auth_storage.dart`: Menyambungkan `SecureLocalStorage` ke `Supabase.initialize`, memeriksa kesehatan penyimpanan aman sebelum masuk/daftar/pulihkan sesi (tanpa fallback plaintext), mendukung konfirmasi email & kirim ulang konfirmasi, membersihkan state memori + cache SQLite saat `logout()`, tetap membersihkan sesi & cache lokal ketika `signOut()` gagal karena offline, serta menolak pergantian akun bila pembersihan cache lokal gagal.
+- `lib/state/planner_controller.dart`, `lib/app/app.dart`, `lib/main.dart`: Memisahkan secara eksplisit Mode Demo vs Mode Backend (`isDemo` vs `isCloud`), memulai mode cloud dari snapshot kosong (bukan `demoSnapshot()`), mengikat setiap respons asinkron ke `_authEpoch` dan `_userId` agar respons terlambat dari Akun A tidak mencemari Akun B, memuat ulang snapshot server otomatis saat terjadi `TIMEOUT` atau `STALE_REVISION` tanpa mengirim ulang mutasi secara buta, memblokir mutasi dan penyusunan pratinjau ketika offline (`fromCache == true`), serta memulihkan snapshot secara otomatis saat koneksi kembali melalui `connectivity_plus`.
+- Pengujian baru yang ditambahkan dan lulus:
+  - `test/data/planner_api_test.dart` (pemetaan kode kesalahan RPC, validasi respons cacat, isolasi respons lintas akun, pemulihan timeout/revisi usang, penolakan mutasi saat offline).
+  - `test/data/cache_test.dart` (isolasi cache SQLite per `user_id` di atas `sqflite_common_ffi`, fallback offline dengan `fetchedAt`, pembersihan cache saat logout, serta pemulihan otomatis ke snapshot segar).
+  - `test/data/auth_storage_test.dart` (siklus `SecureLocalStorage`, pendaftaran dengan konfirmasi email, masuk, blokir saat gagal hapus cache, logout saat offline, dan penolakan masuk saat penyimpanan aman rusak).
+  - `test/planner/schedule_test.dart` (uji batas kinerja penyusunan pratinjau 50 tugas melintasi 14 tanggal WIB selesai dalam `< 1000 ms`).
+  - `integration_test/storage_test.dart` (uji integrasi perangkat untuk `SecureLocalStorage` dan `SqliteLocalCache`).
+
+
+## UI/UX redesign - 10 November 2026 (Asia/Jakarta)
+
+Arah Modern Productivity dipertahankan dan dipertajam menjadi planner editorial berorientasi tindakan, berdasarkan pencarian UI/UX Pro Max dan render UI terbaru. Ringkasan memprioritaskan sesi/progres, Tugas menjadi daftar datar dengan footer tambah, Waktu mendahulukan kapasitas bersih, agenda memakai jam sejajar/adaptif, pratinjau menjelaskan konsekuensi di footer, serta seluruh form/auth memakai tema dan kontrol bersama. Label progres diperpendek setelah terlihat terpotong pada teks besar. Tidak ada perubahan algoritma, backend, dependency atau data produksi dalam pekerjaan ini; perubahan pengguna yang sudah ada dipertahankan.
+
+Verifikasi: 55 tes planner/UI/data lulus; 15 tes render lulus dengan screenshot sebelum/sesudah pada 360/412 dp dan skala 1.0/1.8, form lima varian, auth, kosong, terlambat/judul panjang, offline/loading dan keyboard; uji kontras dan target 48 dp lulus. Format 41 file 0 perubahan, analyze tanpa masalah, build APK debug berhasil. Aplikasi juga berjalan di Chrome. Belum ada perangkat Android untuk TalkBack/IME/gesture atau smoke test; backend nyata tidak diuji ulang. Bukti: docs/design/redesign-audit.md dan docs/design/redesign-review.html. Acuan visual final: docs/design/DESIGN.md.
+
+
+## Studio Fokus - revisi visual menyeluruh, 10 November 2026
+
+Pengguna menilai hasil pertama masih terlalu mirip dan mengizinkan arah visual baru tanpa referensi produk. Studio Fokus menggantikan Modern Productivity biru: ivory/pinus/lime, panel fokus, dock navigasi mengambang, lembar tugas, agenda berblok jam, pengantar formulir, auth/akun baru dan progres yang memprioritaskan input. Semua layar mengikuti DESIGN.md baru; aturan bisnis PRD, route, controller dan backend dipertahankan.
+
+Hasil: 55 tes planner/UI/data lulus termasuk render screenshot 360/412 dp pada skala 1.0/1.8, kontras panel/CTA baru, keyboard, offline/loading, kosong, judul panjang, preview basi, form dan progres. flutter analyze tanpa masalah; format 41 file 0 perubahan; diff --check bersih. Chrome main berhasil berjalan. APK release berhasil (57.8 MB) dan disalin sebagai build/app/outputs/flutter-apk/WaktuTugas-StudioFokus.apk dengan hash terverifikasi. Build memakai signing debug existing untuk demo lokal.
+
+Catatan build: --release --no-pub awalnya memakai registrant integration_test debug yang basi. Flutter build apk --release tanpa --no-pub menyegarkan registrasi sesuai mode release dan berhasil; tidak mengubah konfigurasi atau dependency. Bukti: docs/design/studio-fokus-review.html (17 pasangan dan 13 state), docs/design/studio-fokus-audit.md. Android fisik, TalkBack, IME Android dan backend hidup belum diverifikasi.

@@ -1,35 +1,87 @@
-# WaktuTugas — Playful Lime
+# WaktuTugas - Studio Fokus
 
-Arahan desain berdasarkan gambar referensi pengguna `download (12).jpg`. Nilai warna, ukuran, dan font di bawah adalah spesifikasi usulan, bukan hasil pengukuran gambar. Menggantikan arahan visual hijau lama untuk desain baru; aturan produk tetap mengikuti PRD 1.2. Kode aplikasi belum diubah.
+Acuan tunggal visual Flutter, 10 November 2026. Arah ini menggantikan Modern Productivity biru dan perapian awal. Permintaan pengguna: tentukan desain baru secara mandiri, tanpa meniru referensi produk, dengan isi PRD sebagai batas.
 
-## 1. Visual Theme & Atmosphere
-Playful neobrutalism: latar krem, aksen lime terang, outline hitam, bayangan keras, ilustrasi pastel, dan doodle kecil. Ramah mahasiswa, dengan informasi tugas dan waktu sebagai fokus.
+## 1. Tema
 
-## 2. Color
-- canvas: #FFFDF2; surface: #FFFFFF; ink: #171717.
-- primary: #D7FF00, selalu dengan teks ink.
-- illustration accents: cyan #A7E8F5, lilac #CBBEFF, pink #FFBEDD.
-- error text: #B3261E di canvas; success text: #245D3A di canvas.
-- Pastel hanya dekorasi atau latar; status selalu disertai teks dan ikon. Periksa kontras sebelum handoff.
-- Lime memenuhi latar board presentasi; layar aplikasi tetap dominan krem.
+Studio Fokus adalah planner mahasiswa dengan karakter hangat, taktil, dan tegas: kertas ivory, panel hijau pinus, aksen lime, headline ekspresif, dan navigasi berupa dock gelap. Komposisi dibangun ulang per fungsi halaman, bukan sekadar mengganti warna tema. Tidak ada gambar, grafik, persentase, atau fitur yang tidak didukung model.
 
-## 3. Typography
-Usulan: Plus Jakarta Sans, satu keluarga dengan fallback sans-serif. Judul 28/34 bold, section 20/28 bold, body 16/24 regular, label 14/20 medium. Ini pilihan desain, belum font terpasang. Ukuran dalam logical pixels untuk handoff Flutter; dukung pembesaran teks tanpa clipping.
+UI/UX Pro Max dipakai melalui pencarian lokal `student planner expressive editorial mobile --design-system` dan `adaptive forms material accessibility --stack flutter`. Prinsip grid, kontras, hierarki dan ColorScheme dipakai. Rekomendasi hero marketing, pola landing page, font unduhan dan palet pink tidak diterapkan. Tidak ada penelusuran atau peniruan produk referensi.
 
-## 4. Spacing & Grid
-Baseline Android 412 × 915; validasi juga lebar 360. Padding horizontal 20; skala jarak 4, 8, 12, 16, 20, 24, 32. Area sentuh minimal 48 × 48. Safe area dan keyboard diperhitungkan; tinggi konten mengikuti isinya.
+## 2. Palet
 
-## 5. Layout & Composition
-Empat tab Ringkasan, Tugas, Waktu, Jadwal. Konten vertikal; agenda dikelompokkan per tanggal. Formulir, autentikasi, pratinjau, dan detail sesi di luar shell tab. Satu tindakan utama jelas per layar. Doodle di ruang kosong, tidak di belakang teks atau formulir. Jangan membuat onboarding tambahan hanya untuk meniru referensi.
+Token runtime berada di `lib/app/theme.dart`.
 
-## 6. Components
-Card: fill krem/putih, stroke ink 2, radius 16, shadow solid ink offset (4,4), blur 0. Tombol utama: lime, stroke ink 2, radius 12, min-height 52. Field: fill putih, stroke ink 2, radius 12, label permanen; error dekat field. Status berupa teks dan ikon dengan pastel lembut. NavigationBar krem dengan indikator lime; tab aktif juga dibedakan bentuk/weight. Dialog hapus memakai Batal dan tindakan destruktif eksplisit. Pending, disabled, focused, error, empty, offline, stale, read-only harus memiliki varian relevan.
+| Peran | Token | Nilai |
+| --- | --- | --- |
+| Kertas utama | canvas | #F7F5ED |
+| Lembar isi | surface | #FFFEFA |
+| Latar sekunder | surfaceMuted | #EBEDE2 |
+| Panel utama / dock | forest | #183D36 |
+| Teks di panel | onForest | #EDF3DF |
+| Sorotan / CTA panel / tab aktif | lime | #D7ED98 |
+| Teks utama | ink | #203A32 |
+| Teks sekunder / helper | inkSecondary / inkMuted | #4D5F54 / #53624F |
+| Primary / primaryDark | primary / primaryDark | #285847 / #1B4334 |
+| Primary lembut | primarySoft / primaryBorder | #EAF0DF / #CEDDBB |
+| Pemisah / kontrol aktif | border / borderStrong | #DFE3D5 / #73816B |
+| Selesai | success / successSoft | #15803D / #DCFCE7 |
+| Peringatan | warningInk / warningSoft | #92400E / #FEF3C7 |
+| Kesalahan | error / errorSoft | #B91C1C / #FEE2E2 |
 
-## 7. Motion & Interaction
-Usulan feedback tekan 100–150 ms: tombol bergeser 2 px menuju bayangan. Transisi sederhana, tanpa animasi dekoratif berulang; hormati reduced motion. Feedback tidak mengubah ukuran layout atau menyembunyikan status simpan.
+Lime memakai teks ink/forest, bukan putih. Teks pada pinus memakai surface/onForest/lime. Uji kontras mencakup seluruh pasangan ini, teks biasa >=4.5:1, batas kontrol >=3:1. Tidak ada dark-mode toggle; panel pinus adalah bagian dari satu tema terang.
 
-## 8. Voice & Brand
-Bahasa Indonesia jelas dan mendukung. Contoh: “Ruang untuk fokus”, “120 menit belum tertampung”, “Periksa rencana Anda”. Semua jam WIB. Bedakan sesi selesai dari tugas selesai, pratinjau dari jadwal tersimpan, dan di luar jendela dari kekurangan kapasitas. Ilustrasi orisinal bertema buku, pensil, jam, kalender, atau tas kuliah.
+## 3. Tipografi
 
-## 9. Anti-patterns
-Hindari soft shadow blur, glassmorphism, neon glow, gradasi pada panel data, teks pastel berkontras rendah, doodle di bawah teks, serta card bertumpuk pada daftar yang harus dibaca. Jangan menyalin NFT, harga ETH, wallet, bidding, avatar, atau karya ilustrasi referensi. Jangan menambahkan AI chat, drag-and-drop, notifikasi, atau fitur di luar MVP. Jangan memalsukan auth atau offline yang belum tersedia.
+Plus Jakarta Sans lokal dipertahankan sebagai aset proyek, bukan sebagai acuan gaya lama. Perbedaan karakter berasal dari skala dan komposisi baru.
+
+| Peran | Ukuran / height | Weight |
+| --- | --- | --- |
+| Judul panel utama | 32 / 1.12 | 700 |
+| Judul panel saat teks besar | 22 sebelum textScaler, tetap diperbesar OS | 700 |
+| Judul halaman | 30 / 1.15 | 700 |
+| Judul subbagian besar | 23 / 1.2 | 700 |
+| Judul tugas / bagian | 18 / 1.35 | 700 |
+| Judul sesi | 15 / 1.4 | 600-700 |
+| Isi | 14-15 / 1.5-1.6 | 400 |
+| Metadata / eyebrow | 12 / 1.45-1.5 | 500-600 |
+
+Headline panel memiliki letter spacing -1. Ukuran headline menyesuaikan saat teks besar agar kata panjang tidak terpecah; textScaler pengguna tetap berlaku. Input, helper dan isi tidak dibatasi skalanya. Status selalu terbaca lewat teks dan ikon.
+
+## 4. Komponen
+
+- `FocusPanel`: panel pinus dengan ikon lime, eyebrow konteks, headline dan footer opsional. Dipakai untuk fokus Ringkasan, kapasitas waktu, agenda, kandidat pratinjau, auth/akun dan identitas sesi. Semua isinya berasal dari konteks atau model halaman.
+- `PaperCard`: lembar isi warm white, radius 20, border 1, tanpa bayangan. Mengelompokkan satu tugas, satu sesi, atau bagian formulir. Tidak membuat kartu bertumpuk untuk setiap baris.
+- `AppButton`: tinggi minimum 56; primary pinus atau secondary warm white. Varian highlighted memakai lime hanya pada panel pinus. Feedback Material native, tanpa translasi custom.
+- `SessionCard`: blok jam di kiri memakai primarySoft; judul dan status di kanan. Pada teks besar, waktu berada di atas detail.
+- `PageHeading` dan `SectionHeader`: pengantar serta hierarki halaman, tidak menyamar sebagai kontrol.
+- `FormActions`: Simpan selebar konten di atas Batal; tidak menutupi area gulir dan mengikuti keyboard.
+- `Notice`, `StatusBadge`, `PickerField`: peran, validator, helper, semantik dan batasan perilaku tetap terjaga.
+
+## 5. Komposisi layar
+
+- **Ringkasan:** panel fokus menampung tanggal, beban nyata, sesi berikutnya atau sesi yang perlu dicatat, serta satu tindakan dominan lime. Agenda hari ini dan tenggat mengikuti di permukaan kertas.
+- **Tugas:** headline halaman dan beban ringkas; tiap lembar menempatkan status, nama selebar konten, mata kuliah, tenggat dan durasi, dengan aksi edit/hapus 48 dp. Tambah tugas tetap di footer.
+- **Waktu:** panel kapasitas bersih memperlihatkan durasi dan rumus izin dikurangi kegiatan/penutupan. Pengaturan dan rincian interval adalah bagian berbeda di bawahnya.
+- **Jadwal:** panel agenda memuat status dan tindakan pratinjau. Kandidat bukan jadwal tersimpan. Agenda dikelompokkan tanggal; kontrol jam demo berada setelah agenda.
+- **Pratinjau:** pengantar ringkas menandai usulan belum tersimpan; panel menunjukkan jumlah sesi dan jendela 14 tanggal. Kekurangan, agenda kandidat dan alokasi tetap eksplisit. Peringatan basi tetap memblokir konfirmasi. Konsekuensi simpan berada di footer.
+- **Form tugas/waktu:** pengantar editorial singkat di atas satu lembar input. Label permanen, tenggat/jam dikelompokkan, helper dekat input. Dropdown tingginya intrinsik (`isDense: false`, `itemHeight: null`) agar pilihan panjang tidak terpotong pada teks besar.
+- **Detail sesi:** identitas dalam panel pinus; waktu dan durasi pada lembar terpisah. Selesai dikerjakan/Tandai terlewat berada di footer. Saat mencatat progres, identitas diringkas dan form sisa aktual didahulukan; pengguna tidak perlu melewati seluruh detail lagi.
+- **Auth/akun:** panel identitas yang konsisten, formulir serta tombol nyata di bawahnya. Demo dan penyimpanan sementara tetap dijelaskan secara jujur.
+- **Alasan kekurangan:** bagian berdasarkan alasan, dengan label serta teks penjelasan yang tetap membedakan tenggat lewat, kapasitas kurang, dan luar horizon.
+
+## 6. Spasi, bentuk dan kedalaman
+
+Ritme 4/8 dp. Gutter 20, jarak bagian 24, lebar maksimum 560, radius lembar/kontrol 20, panel 28, dock 24. Panel padding 24; konten biasa 16-20. Ikon SVG outline yang sudah tersedia dipakai konsisten. Tidak ada gradient, glassmorphism, shadow berat atau emoji kontrol.
+
+## 7. Interaksi dan aksesibilitas
+
+Target Android minimal 48 x 48 dp. Callback null mempertahankan semantik disabled, dengan penjelasan offline/pending pada konteksnya. Fokus input 2 dp, error inline dan ErrorNotice live region. Isian tidak dibuang ketika gagal. Native Material menangani feedback tekan dan keyboard; transisi halaman serta indikator tab menghormati disableAnimations. SafeArea, resize Scaffold dan footer tersendiri mempertahankan akses isi ketika keyboard muncul.
+
+## 8. Aturan dan batas
+
+PRD tetap mengikat fitur, UTC/WIB, revisi, validasi, cache per akun, controller, route dan scheduler. Empat tab tidak berubah. Selesai sesi bukan otomatis selesai tugas. Tidak mengubah backend, menambah dependency atau mengarang data produksi. Bentuk UI yang atraktif tidak boleh menyamarkan kandidat sebagai hasil simpan.
+
+## 9. Bukti dan panduan berikutnya
+
+Buka `studio-fokus-review.html` untuk perbandingan versi sebelumnya dan Studio Fokus pada fixture yang sama. Screenshot baru ada di `screenshots/studio-fokus/`; hasil lama dipertahankan. Penyesuaian berikutnya harus memakai token ini dan isi PRD, bukan kembali ke sistem biru lama. Catatan pemeriksaan dan batas ada di `studio-fokus-audit.md`.

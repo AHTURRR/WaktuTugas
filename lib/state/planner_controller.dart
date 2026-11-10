@@ -1,9 +1,21 @@
+// ignore_for_file: prefer_initializing_formals
+
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../data/cache.dart';
 import '../data/planner_api.dart';
 import '../planner/fixtures.dart';
 import '../planner/models.dart';
 import '../planner/schedule.dart';
+
+PlannerSnapshot _emptySnapshot() => PlannerSnapshot(
+  revision: 0,
+  tasks: [],
+  timeWindows: [],
+  activities: [],
+  sessions: [],
+);
 
 class PlannerController extends ChangeNotifier {
   PlannerSnapshot _snapshot;
@@ -20,20 +32,64 @@ class PlannerController extends ChangeNotifier {
   bool get isOfflineSnapshot => _isOfflineSnapshot;
   DateTime? get fetchedAt => _fetchedAt;
   DateTime _demoTime = demoNow;
+  bool _demoMode = false;
+  int _authEpoch = 0;
+  String? _userId;
+  String? get userId => _userId;
   final DateTime Function()? _clock;
   final PlannerApi? api;
   final LocalCache? cache;
-  final String? userId;
-  DateTime get now => (_clock?.call() ?? _demoTime).toUtc();
-  bool get isApiBacked => api != null;
+  final VoidCallback? onUnauthenticated;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  DateTime get now =>
+      ((_demoMode ? null : _clock)?.call() ?? _demoTime).toUtc();
+  bool get isApiBacked => api != null && !_demoMode;
 
   PlannerController({
     PlannerSnapshot? initial,
-    this._clock,
+    DateTime Function()? clock,
     this.api,
     this.cache,
-    this.userId,
-  }) : _snapshot = initial ?? demoSnapshot();
+    String? userId,
+    this.onUnauthenticated,
+    Stream<List<ConnectivityResult>>? connectivityStream,
+  }) : _clock = clock,
+       _userId = userId,
+       _snapshot =
+           initial ?? (api != null ? _emptySnapshot() : demoSnapshot()) {
+    _connectivitySub = connectivityStream?.listen(_onConnectivityChanged);
+  }
+
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    if (!isApiBacked) return;
+    final offline =
+        results.isEmpty || results.every((r) => r == ConnectivityResult.none);
+    if (!offline && _isOfflineSnapshot && !_isPending && _userId != null) {
+      fetchSnapshot(userId: _userId);
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
+  void bindUser(String? nextUserId) {
+    if (_userId == nextUserId && !_demoMode) return;
+    _authEpoch++;
+    _userId = nextUserId;
+    _demoMode = false;
+    _isPending = false;
+    _snapshot = _emptySnapshot();
+    _preview = null;
+    error = null;
+    errorCode = null;
+    _isOfflineSnapshot = false;
+    _fetchedAt = null;
+    needsReschedule = false;
+    notifyListeners();
+  }
 
   Task? taskById(String id) =>
       snapshot.tasks.where((t) => t.id == id).firstOrNull;
@@ -44,6 +100,10 @@ class PlannerController extends ChangeNotifier {
   );
 
   void resetDemo() {
+    _authEpoch++;
+    _demoMode = true;
+    _userId = null;
+    _isPending = false;
     _snapshot = demoSnapshot();
     _preview = null;
     error = null;
@@ -56,13 +116,11 @@ class PlannerController extends ChangeNotifier {
   }
 
   void clear() {
-    _snapshot = PlannerSnapshot(
-      revision: 0,
-      tasks: [],
-      timeWindows: [],
-      activities: [],
-      sessions: [],
-    );
+    _authEpoch++;
+    _userId = null;
+    _demoMode = false;
+    _isPending = false;
+    _snapshot = _emptySnapshot();
     _preview = null;
     error = null;
     errorCode = null;
@@ -75,10 +133,26 @@ class PlannerController extends ChangeNotifier {
   Future<bool> fetchSnapshot({
     String? userId,
     bool allowPending = false,
+    bool preserveRescheduleFlag = false,
   }) async {
     final api = this.api;
     if (api == null) return false;
     if (_isPending && !allowPending) return false;
+
+    if (userId != null && userId != _userId) {
+      _authEpoch++;
+      _userId = userId;
+      _demoMode = false;
+      _snapshot = _emptySnapshot();
+      _preview = null;
+      _isOfflineSnapshot = false;
+      _fetchedAt = null;
+      needsReschedule = false;
+    } else {
+      _demoMode = false;
+    }
+    final reqEpoch = _authEpoch;
+    final resolvedUserId = userId ?? _userId;
 
     _isPending = true;
     error = null;
@@ -86,24 +160,36 @@ class PlannerController extends ChangeNotifier {
     notifyListeners();
     try {
       final fetched = await api.fetchSnapshot();
+      if (_authEpoch != reqEpoch || _userId != resolvedUserId) {
+        return false;
+      }
       _snapshot = fetched;
       _preview = null;
       _isOfflineSnapshot = false;
       _fetchedAt = DateTime.now().toUtc();
-      needsReschedule = false;
+      if (!preserveRescheduleFlag) {
+        needsReschedule = false;
+      }
       final cache = this.cache;
-      final resolvedUserId = userId ?? this.userId;
       if (cache != null && resolvedUserId != null) {
         await cache.writeCachedSnapshot(resolvedUserId, fetched, _fetchedAt!);
       }
       return true;
     } on PlannerApiException catch (e) {
+      if (_authEpoch != reqEpoch || _userId != resolvedUserId) {
+        return false;
+      }
+      if (e.code == 'UNAUTHENTICATED') {
+        _setApiError(e);
+        onUnauthenticated?.call();
+        return false;
+      }
       final cache = this.cache;
-      final resolvedUserId = userId ?? this.userId;
-      if (cache != null &&
-          resolvedUserId != null &&
-          e.code != 'UNAUTHENTICATED') {
+      if (cache != null && resolvedUserId != null && !allowPending) {
         final cached = await cache.readCachedSnapshot(resolvedUserId);
+        if (_authEpoch != reqEpoch || _userId != resolvedUserId) {
+          return false;
+        }
         if (cached != null) {
           _snapshot = cached.snapshot;
           _preview = null;
@@ -116,14 +202,15 @@ class PlannerController extends ChangeNotifier {
       _setApiError(e);
       return false;
     } finally {
-      _isPending = false;
+      if (_authEpoch == reqEpoch) {
+        _isPending = false;
+      }
       notifyListeners();
     }
   }
 
-  // shortcut: synthetic clock for the local demonstration, replace with server time at cloud integration.
   void advanceDemoClock() {
-    if (_clock != null || isPending) return;
+    if ((_clock != null && !_demoMode) || isApiBacked || isPending) return;
     final starts = [
       ...snapshot.sessions
           .where((s) => s.status == SessionStatus.planned)
@@ -139,6 +226,12 @@ class PlannerController extends ChangeNotifier {
 
   Future<bool> _run(void Function() action) async {
     if (_isPending) return false;
+    if (_isOfflineSnapshot) {
+      error = 'Mode luring hanya mendukung pembacaan jadwal tersimpan.';
+      errorCode = 'OFFLINE';
+      notifyListeners();
+      return false;
+    }
     _isPending = true;
     error = null;
     errorCode = null;
@@ -163,20 +256,69 @@ class PlannerController extends ChangeNotifier {
     }
   }
 
-  Future<bool> _runApi(Future<int> Function(int revision) action) async {
-    if (api == null || _isPending) return false;
+  Future<void> _reloadSnapshotAfterUncertainOrStale(
+    int reqEpoch,
+    String? reqUserId,
+  ) async {
+    final api = this.api;
+    if (api == null) return;
+    try {
+      final fetched = await api.fetchSnapshot();
+      if (_authEpoch != reqEpoch || _userId != reqUserId) return;
+      _snapshot = fetched;
+      _isOfflineSnapshot = false;
+      _fetchedAt = DateTime.now().toUtc();
+      final cache = this.cache;
+      if (cache != null && reqUserId != null) {
+        await cache.writeCachedSnapshot(reqUserId, fetched, _fetchedAt!);
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> _runApi(
+    Future<int> Function(int revision) action, {
+    bool marksReschedule = true,
+  }) async {
+    final api = this.api;
+    if (api == null || _demoMode || _isPending) return false;
+    if (_isOfflineSnapshot) {
+      error = 'Mode luring hanya mendukung pembacaan jadwal tersimpan.';
+      errorCode = 'OFFLINE';
+      notifyListeners();
+      return false;
+    }
+    final reqEpoch = _authEpoch;
+    final reqUserId = _userId;
     _isPending = true;
     error = null;
     errorCode = null;
     notifyListeners();
     try {
       await action(snapshot.revision);
-      return await fetchSnapshot(allowPending: true);
+      if (_authEpoch != reqEpoch || _userId != reqUserId) return false;
+      final ok = await fetchSnapshot(
+        userId: reqUserId,
+        allowPending: true,
+        preserveRescheduleFlag: marksReschedule,
+      );
+      if (ok && marksReschedule) {
+        needsReschedule = true;
+      }
+      return ok;
     } on PlannerApiException catch (e) {
+      if (_authEpoch != reqEpoch || _userId != reqUserId) return false;
+      if (e.code == 'TIMEOUT' || e.code == 'STALE_REVISION') {
+        await _reloadSnapshotAfterUncertainOrStale(reqEpoch, reqUserId);
+      }
+      if (e.code == 'UNAUTHENTICATED') {
+        onUnauthenticated?.call();
+      }
       _setApiError(e);
       return false;
     } finally {
-      _isPending = false;
+      if (_authEpoch == reqEpoch) {
+        _isPending = false;
+      }
       notifyListeners();
     }
   }
@@ -217,7 +359,7 @@ class PlannerController extends ChangeNotifier {
     int? expectedRevision,
   }) {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => api.saveTask(
           taskId: id,
@@ -264,7 +406,7 @@ class PlannerController extends ChangeNotifier {
   }) async {
     if (!confirmed) return false;
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => api.deleteTask(
           taskId: id,
@@ -284,7 +426,7 @@ class PlannerController extends ChangeNotifier {
 
   Future<bool> saveWindow(TimeWindow window, {int? expectedRevision}) {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => api.saveTimeWindow(
           id: snapshot.timeWindows.any((w) => w.id == window.id)
@@ -313,7 +455,7 @@ class PlannerController extends ChangeNotifier {
 
   Future<bool> saveActivity(Activity activity, {int? expectedRevision}) {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => api.saveActivity(
           id: snapshot.activities.any((a) => a.id == activity.id)
@@ -348,7 +490,7 @@ class PlannerController extends ChangeNotifier {
     int? expectedRevision,
   }) {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => activity
             ? api.deleteActivity(
@@ -387,7 +529,7 @@ class PlannerController extends ChangeNotifier {
   });
   Future<bool> confirmSchedule() {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       final candidate = _preview;
       if (candidate == null) {
         error = 'Hitung pratinjau terlebih dahulu.';
@@ -395,7 +537,29 @@ class PlannerController extends ChangeNotifier {
         notifyListeners();
         return Future.value(false);
       }
-      return _runApi((_) => api.confirmSchedule(preview: candidate));
+      if (candidate.inputRevision != snapshot.revision) {
+        error = 'Data berubah. Hitung ulang pratinjau sebelum konfirmasi.';
+        errorCode = 'STALE_REVISION';
+        notifyListeners();
+        return Future.value(false);
+      }
+      if (hasStartedPlanned) {
+        error = 'Tutup progres sesi yang sudah mulai.';
+        errorCode = 'VALIDATION_ERROR';
+        notifyListeners();
+        return Future.value(false);
+      }
+      if (candidate.windowEnd != horizonEnd(now) ||
+          candidate.sessions.any((s) => !s.startsAt.isAfter(now))) {
+        error = 'Pratinjau kedaluwarsa. Hitung ulang sebelum konfirmasi.';
+        errorCode = 'VALIDATION_ERROR';
+        notifyListeners();
+        return Future.value(false);
+      }
+      return _runApi(
+        (_) => api.confirmSchedule(preview: candidate),
+        marksReschedule: false,
+      );
     }
     return _run(() {
       final candidate = _preview;
@@ -446,7 +610,7 @@ class PlannerController extends ChangeNotifier {
     int? expectedRevision,
   }) {
     final api = this.api;
-    if (api != null) {
+    if (api != null && !_demoMode) {
       return _runApi(
         (revision) => api.recordProgress(
           sessionId: id,

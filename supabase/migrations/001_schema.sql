@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.activities (
     date date,
     start_minute integer NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
     end_minute integer NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
-    CONSTRAINT activities_label_length CHECK (char_length(trim(label)) BETWEEN 1 AND 120),
+    CONSTRAINT activities_label_length CHECK (char_length(trim(label)) <= 120),
     CONSTRAINT activities_order CHECK (end_minute > start_minute),
     CONSTRAINT activities_kind_target CHECK (
         (kind = 'routine' AND weekday IS NOT NULL AND date IS NULL) OR
@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS public.sessions (
         isfinite(starts_at) AND isfinite(ends_at)
         AND date_trunc('minute', starts_at) = starts_at
         AND date_trunc('minute', ends_at) = ends_at
+    ),
+    CONSTRAINT sessions_status_fields CHECK (
+        (status = 'completed' AND remaining_after IS NOT NULL AND remaining_after >= 0 AND closed_at IS NOT NULL) OR
+        (status = 'missed' AND remaining_after IS NULL AND closed_at IS NOT NULL) OR
+        (status IN ('planned', 'cancelled') AND remaining_after IS NULL AND closed_at IS NULL)
     ),
     CONSTRAINT sessions_task_owner_fkey FOREIGN KEY (task_id, user_id) REFERENCES public.tasks(id, user_id) ON DELETE CASCADE,
     CONSTRAINT sessions_user_unique UNIQUE (id, user_id)

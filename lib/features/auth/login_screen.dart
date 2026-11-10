@@ -72,28 +72,23 @@ class _LoginScreenState extends State<LoginScreen> {
         key: form,
         child: PageContent(
           children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: StudyIllustration(),
-              ),
-            ),
-            PageHeading(
-              demo
-                  ? 'Coba tanpa akun'
+            FocusPanel(
+              eyebrow: 'WAKTUTUGAS / STUDIO FOKUS',
+              icon: 'imgCalendarAction',
+              title: demo
+                  ? 'Coba ritme\nbelajar Anda.'
                   : register
-                  ? 'Mulai lebih terencana'
+                  ? 'Buka ruang\nuntuk fokus.'
                   : confirmation
-                  ? 'Periksa email Anda'
-                  : 'Waktu untuk yang penting.',
-              demo
-                  ? 'Jelajahi alur dengan data contoh, tanpa terhubung ke layanan daring.'
+                  ? 'Periksa\nkotak masuk.'
+                  : 'Tugas tertata.\nPikiran lega.',
+              description: demo
+                  ? 'Jelajahi perencanaan dengan data contoh, tanpa membuat akun.'
                   : register
-                  ? 'Buat akun untuk merencanakan tugas kuliah Anda.'
+                  ? 'Satu tempat untuk tugas kuliah, waktu luang, dan sesi pengerjaan.'
                   : confirmation
-                  ? 'Buka tautan konfirmasi sebelum masuk.'
-                  : 'Atur tugas, luangkan waktu, dan jalani satu sesi fokus pada satu waktu.',
+                  ? 'Buka tautan konfirmasi yang kami kirim sebelum masuk.'
+                  : 'Atur yang perlu dikerjakan. Temukan waktu yang benar-benar tersedia.',
             ),
             if (demo) ...[
               const Notice(
@@ -103,33 +98,96 @@ class _LoginScreenState extends State<LoginScreen> {
                 message:
                     'Perubahan hanya disimpan selama aplikasi terbuka. Akun daring belum terhubung.',
               ),
-              const PaperCard(
+              PaperCard(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Mahasiswa demo',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const DesignIcon(
+                            'imgUserCircle',
+                            size: 22,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Mahasiswa demo',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                '3 tugas · 540 menit tersisa',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 8),
-                    Text('3 tugas · 540 menit tersisa'),
-                    Text('Senin, 9 November 2026 · 18:00 WIB'),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1),
+                    ),
+                    const Row(
+                      children: [
+                        DesignIcon(
+                          'imgCalendar',
+                          size: 15,
+                          color: AppColors.inkMuted,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Senin, 9 November 2026 · 18:00 WIB',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.inkSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               const Text(
                 'Kontrol memajukan jam hanya ada di Jadwal demo. Bukan waktu perangkat.',
+                style: TextStyle(fontSize: 12, color: AppColors.inkSecondary),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               AppButton(
                 label: 'Buka demo lokal',
                 icon: 'imgArrowRight',
                 onPressed: widget.auth.enterDemo,
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => changeView(_LoginView.login),
-                child: const Text('Kembali ke masuk'),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: () => changeView(_LoginView.login),
+                  child: const Text('Kembali ke masuk'),
+                ),
               ),
             ] else if (confirmation) ...[
               Notice(
@@ -137,7 +195,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 message:
                     'Buka tautan yang dikirim ke ${email.text.trim()} sebelum masuk.',
               ),
-              const Text('Belum menerima email? Periksa folder spam.'),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Belum menerima email? Periksa folder spam.',
+                  style: TextStyle(fontSize: 13, color: AppColors.inkSecondary),
+                ),
+              ),
               ErrorNotice(widget.auth.error),
               AppButton(
                 label: pending
@@ -161,9 +225,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                       },
               ),
-              TextButton(
-                onPressed: pending ? null : () => changeView(_LoginView.login),
-                child: const Text('Kembali ke masuk'),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: pending
+                      ? null
+                      : () => changeView(_LoginView.login),
+                  child: const Text('Kembali ke masuk'),
+                ),
               ),
             ] else ...[
               if (!widget.auth.isCloud)
@@ -172,70 +241,88 @@ class _LoginScreenState extends State<LoginScreen> {
                   message:
                       'Gunakan demo lokal. Masuk dan daftar tersedia setelah layanan daring dikonfigurasi.',
                   color: AppColors.warning,
+                  icon: 'imgAlertCircle',
                 ),
-              if (register) ...[
-                TextFormField(
-                  controller: name,
-                  enabled: !pending && widget.auth.isCloud,
-                  maxLength: 120,
-                  textCapitalization: TextCapitalization.words,
-                  autofillHints: const [AutofillHints.name],
-                  decoration: const InputDecoration(labelText: 'Nama'),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Nama wajib diisi.'
-                      : null,
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (register) ...[
+                      TextFormField(
+                        controller: name,
+                        enabled: !pending && widget.auth.isCloud,
+                        maxLength: 120,
+                        textCapitalization: TextCapitalization.words,
+                        autofillHints: const [AutofillHints.name],
+                        decoration: const InputDecoration(labelText: 'Nama'),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Nama wajib diisi.'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    TextFormField(
+                      controller: email,
+                      enabled: !pending && widget.auth.isCloud,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        suffixIcon: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: DesignIcon(
+                            'imgMail',
+                            size: 20,
+                            color: AppColors.inkSecondary,
+                          ),
+                        ),
+                      ),
+                      validator: (v) =>
+                          v == null ||
+                              !RegExp(
+                                r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                              ).hasMatch(v.trim())
+                          ? 'Masukkan alamat email yang valid.'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: password,
+                      enabled: !pending && widget.auth.isCloud,
+                      obscureText: obscure,
+                      autofillHints: [
+                        register
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password,
+                      ],
+                      onFieldSubmitted: (_) {
+                        if (!pending && widget.auth.isCloud) submit();
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Kata sandi',
+                        helperText: register ? 'Minimal 8 karakter.' : null,
+                        suffixIcon: IconButton(
+                          tooltip: obscure
+                              ? 'Tampilkan kata sandi'
+                              : 'Sembunyikan kata sandi',
+                          onPressed: () => setState(() => obscure = !obscure),
+                          icon: const DesignIcon(
+                            'imgEyeOff',
+                            size: 20,
+                            color: AppColors.inkSecondary,
+                          ),
+                        ),
+                      ),
+                      validator: (v) => v == null || v.isEmpty
+                          ? 'Kata sandi wajib diisi.'
+                          : register && v.length < 8
+                          ? 'Minimal 8 karakter.'
+                          : null,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-              ],
-              TextFormField(
-                controller: email,
-                enabled: !pending && widget.auth.isCloud,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  suffixIcon: Padding(
-                    padding: EdgeInsets.all(14),
-                    child: DesignIcon('imgMail', size: 20),
-                  ),
-                ),
-                validator: (v) =>
-                    v == null ||
-                        !RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        ).hasMatch(v.trim())
-                    ? 'Masukkan alamat email yang valid.'
-                    : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: password,
-                enabled: !pending && widget.auth.isCloud,
-                obscureText: obscure,
-                autofillHints: [
-                  register ? AutofillHints.newPassword : AutofillHints.password,
-                ],
-                onFieldSubmitted: (_) {
-                  if (!pending && widget.auth.isCloud) submit();
-                },
-                decoration: InputDecoration(
-                  labelText: 'Kata sandi',
-                  helperText: register ? 'Minimal 8 karakter.' : null,
-                  suffixIcon: IconButton(
-                    tooltip: obscure
-                        ? 'Tampilkan kata sandi'
-                        : 'Sembunyikan kata sandi',
-                    onPressed: () => setState(() => obscure = !obscure),
-                    icon: const DesignIcon('imgEyeOff', size: 20),
-                  ),
-                ),
-                validator: (v) => v == null || v.isEmpty
-                    ? 'Kata sandi wajib diisi.'
-                    : register && v.length < 8
-                    ? 'Minimal 8 karakter.'
-                    : null,
-              ),
-              const SizedBox(height: 16),
               if (pending)
                 const Notice(
                   title: 'Sedang memproses…',
@@ -250,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     : 'Masuk',
                 onPressed: pending || !widget.auth.isCloud ? null : submit,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               AppButton(
                 label: register
                     ? 'Sudah punya akun? Masuk'
@@ -265,16 +352,26 @@ class _LoginScreenState extends State<LoginScreen> {
               if (!register && !widget.auth.isCloud) ...[
                 const SizedBox(height: 16),
                 PaperCard(
+                  color: AppColors.surfaceMuted,
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
                         'Ingin melihat dulu?',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       const Text(
                         'Coba contoh lokal. Tidak membuat akun daring dan tidak menyimpan data setelah ditutup.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.inkSecondary,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       AppButton(

@@ -163,7 +163,11 @@ void main() {
     await t.ensureVisible(find.text('Majukan jam demo ke sesi berikutnya'));
     await t.tap(find.text('Majukan jam demo ke sesi berikutnya'));
     await t.pumpAndSettle();
-    await t.tap(find.byKey(Key('session-${p.snapshot.sessions.first.id}')));
+    final firstSession = find.byKey(
+      Key('session-${p.snapshot.sessions.first.id}'),
+    );
+    await t.ensureVisible(firstSession);
+    await t.tap(firstSession);
     await t.pumpAndSettle();
     await t.tap(find.text('Selesai dikerjakan'));
     await t.pumpAndSettle();

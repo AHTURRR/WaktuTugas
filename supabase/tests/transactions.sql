@@ -36,6 +36,7 @@ SET LOCAL "request.jwt.claims" = '{"sub":"44444444-4444-4444-4444-444444444444",
 SELECT is(public.save_time_window(NULL,1::smallint,NULL,0,60,0),1::bigint,'first window write initializes state');
 SET LOCAL "request.jwt.claims" = '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
 SELECT is(public.save_activity(NULL,'routine','first',1::smallint,NULL,0,60,0),1::bigint,'first activity write initializes state');
+SELECT is(public.save_activity(NULL,'event','',NULL,(SELECT day FROM pg_temp.context),60,120,1),2::bigint,'empty optional activity label accepted');
 SET LOCAL "request.jwt.claims" = '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
 SELECT throws_ok(q,'P0002',NULL,label) FROM (VALUES
  ($$SELECT public.save_task(NULL,'first',NULL,now(),10,1)$$,'fresh task wrong revision'),

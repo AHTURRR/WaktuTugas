@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
+import '../../app/theme.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
@@ -109,66 +110,86 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
               onCancel: p.isPending ? null : () => Navigator.pop(context),
             ),
             children: [
-              const Text('Tentukan tenggat dan pekerjaan yang masih tersisa.'),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: const Key('title'),
-                controller: title,
-                enabled: !locked,
-                maxLength: 120,
-                decoration: const InputDecoration(labelText: 'Nama tugas *'),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Nama wajib diisi.' : null,
+              const PageHeading(
+                'Buat langkah\nberikutnya.',
+                'Nama yang jelas. Tenggat yang pasti. Estimasi yang realistis.',
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: course,
-                enabled: !locked,
-                maxLength: 100,
-                decoration: const InputDecoration(
-                  labelText: 'Mata kuliah (opsional)',
+              PaperCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      key: const Key('title'),
+                      controller: title,
+                      enabled: !locked,
+                      maxLength: 120,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama tugas *',
+                        hintText: 'Contoh: Laporan Praktikum Basis Data',
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Nama wajib diisi.'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: course,
+                      enabled: !locked,
+                      maxLength: 100,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Mata kuliah (opsional)',
+                        hintText: 'Contoh: Basis Data',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const SectionHeader(title: 'Tenggat pengerjaan'),
+                    ResponsiveFields(
+                      first: PickerField(
+                        label: 'Tanggal tenggat *',
+                        value: DateFormat(
+                          'd MMM yyyy',
+                          'id_ID',
+                        ).format(tz.TZDateTime.from(deadline, jakarta)),
+                        icon: 'imgCalendar',
+                        onTap: locked ? null : () => pickDeadline(),
+                      ),
+                      second: PickerField(
+                        label: 'Waktu · WIB *',
+                        value: clockLabel(deadline),
+                        icon: 'imgClock',
+                        onTap: locked
+                            ? null
+                            : () => pickDeadline(timeOnly: true),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      key: const Key('remaining'),
+                      controller: remaining,
+                      enabled: !locked,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Sisa pekerjaan (menit) *',
+                        helperText: widget.taskId == null
+                            ? 'Bilangan bulat ≥ 1. Bukan durasi yang sudah dikerjakan.'
+                            : 'Bilangan bulat ≥ 0. Isi 0 jika tugas selesai.',
+                      ),
+                      validator: (v) {
+                        final n = int.tryParse(v ?? '');
+                        return n == null || n < (widget.taskId == null ? 1 : 0)
+                            ? (widget.taskId == null
+                                  ? 'Masukkan menit bulat positif.'
+                                  : 'Masukkan menit bulat nonnegatif.')
+                            : null;
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              ResponsiveFields(
-                first: PickerField(
-                  label: 'Tanggal tenggat *',
-                  value: DateFormat(
-                    'd MMM yyyy',
-                    'id_ID',
-                  ).format(tz.TZDateTime.from(deadline, jakarta)),
-                  icon: 'imgCalendar',
-                  onTap: locked ? null : () => pickDeadline(),
-                ),
-                second: PickerField(
-                  label: 'Waktu · WIB *',
-                  value: clockLabel(deadline),
-                  icon: 'imgClock',
-                  onTap: locked ? null : () => pickDeadline(timeOnly: true),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: const Key('remaining'),
-                controller: remaining,
-                enabled: !locked,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Sisa pekerjaan (menit) *',
-                  helperText: widget.taskId == null
-                      ? 'Bilangan bulat ≥ 1. Bukan durasi yang sudah dikerjakan.'
-                      : 'Bilangan bulat ≥ 0. Isi 0 jika tugas selesai.',
-                ),
-                validator: (v) {
-                  final n = int.tryParse(v ?? '');
-                  return n == null || n < (widget.taskId == null ? 1 : 0)
-                      ? (widget.taskId == null
-                            ? 'Masukkan menit bulat positif.'
-                            : 'Masukkan menit bulat nonnegatif.')
-                      : null;
-                },
-              ),
-              const SizedBox(height: 16),
               if (p.isPending)
                 const Notice(
                   title: 'Sedang menyimpan',
@@ -178,6 +199,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
               else if (unknown) ...[
                 const Notice(
                   title: 'Hasil simpan belum pasti',
+                  color: AppColors.warning,
+                  icon: 'imgAlertCircle',
                   message:
                       'Isian tetap ada. Periksa daftar tugas terbaru sebelum mengirim ulang agar tidak membuat tugas ganda.',
                 ),
@@ -203,7 +226,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 ),
               const Text(
                 '* Wajib diisi · semua waktu menggunakan WIB.',
-                style: TextStyle(fontSize: 12),
+                style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
               ),
             ],
           ),

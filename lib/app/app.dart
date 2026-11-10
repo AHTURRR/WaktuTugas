@@ -21,13 +21,22 @@ class _WaktuTugasAppState extends State<WaktuTugasApp> {
     super.initState();
     widget.auth.addListener(_sessionChanged);
     router = createRouter(widget.auth, widget.planner);
+    if (widget.auth.signedIn &&
+        widget.auth.isCloud &&
+        widget.planner.api != null) {
+      widget.planner.fetchSnapshot(userId: widget.auth.userId);
+    }
   }
 
   void _sessionChanged() {
-    if (widget.auth.signedIn && widget.planner.isApiBacked) {
+    if (widget.auth.signedIn &&
+        widget.auth.isCloud &&
+        widget.planner.api != null) {
       widget.planner.fetchSnapshot(userId: widget.auth.userId);
-    } else if (widget.auth.signedIn) {
+    } else if (widget.auth.signedIn && !widget.auth.isCloud) {
       widget.planner.resetDemo();
+    } else if (widget.auth.signedIn && widget.planner.isApiBacked) {
+      widget.planner.fetchSnapshot(userId: widget.auth.userId);
     } else {
       widget.planner.clear();
     }

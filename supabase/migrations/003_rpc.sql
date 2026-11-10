@@ -43,7 +43,7 @@ BEGIN
                     'deadline_at', t.deadline_at,
                     'remaining_minutes', t.remaining_minutes,
                     'created_at', t.created_at
-                ) ORDER BY t.created_at ASC
+                ) ORDER BY t.created_at ASC, t.id ASC
             ) FROM public.tasks t WHERE t.user_id = uid
         ), '[]'::jsonb),
         'time_windows', COALESCE((
@@ -54,7 +54,7 @@ BEGIN
                     'date', w.date,
                     'start_minute', w.start_minute,
                     'end_minute', w.end_minute
-                )
+                ) ORDER BY w.weekday ASC NULLS LAST, w.date ASC NULLS LAST, w.start_minute ASC, w.id ASC
             ) FROM public.time_windows w WHERE w.user_id = uid
         ), '[]'::jsonb),
         'activities', COALESCE((
@@ -67,7 +67,7 @@ BEGIN
                     'date', a.date,
                     'start_minute', a.start_minute,
                     'end_minute', a.end_minute
-                )
+                ) ORDER BY a.weekday ASC NULLS LAST, a.date ASC NULLS LAST, a.start_minute ASC, a.id ASC
             ) FROM public.activities a WHERE a.user_id = uid
         ), '[]'::jsonb),
         'sessions', COALESCE((
@@ -80,7 +80,7 @@ BEGIN
                     'status', s.status,
                     'remaining_after', s.remaining_after,
                     'closed_at', s.closed_at
-                ) ORDER BY s.starts_at ASC
+                ) ORDER BY s.starts_at ASC, s.id ASC
             ) FROM public.sessions s WHERE s.user_id = uid
         ), '[]'::jsonb)
     ) INTO res;
@@ -389,8 +389,8 @@ BEGIN
     END IF;
 
     IF p_kind IS NULL OR p_kind NOT IN ('routine', 'event', 'blocked')
-        OR p_label IS NULL OR char_length(trim(p_label)) NOT BETWEEN 1 AND 120 THEN
-        RAISE EXCEPTION 'VALIDATION_ERROR: Jenis kegiatan tidak valid' USING ERRCODE = 'P0003';
+        OR p_label IS NULL OR char_length(trim(p_label)) > 120 THEN
+        RAISE EXCEPTION 'VALIDATION_ERROR: Jenis atau label kegiatan tidak valid' USING ERRCODE = 'P0003';
     END IF;
 
     IF p_start_minute IS NULL OR p_end_minute IS NULL

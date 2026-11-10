@@ -66,7 +66,11 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 1);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      final file = File('docs/design/screenshots/$name.png');
+      const directory = String.fromEnvironment(
+        'CAPTURE_DIR',
+        defaultValue: 'docs/design/screenshots',
+      );
+      final file = File('$directory/$name.png');
       await file.parent.create(recursive: true);
       await file.writeAsBytes(bytes!.buffer.asUint8List());
       image.dispose();
@@ -122,6 +126,13 @@ void main() {
         await t.tap(find.byTooltip('Kembali'));
         await t.pumpAndSettle();
         await tab('Waktu');
+        await t.ensureVisible(
+          find.text(
+            'Izin digabung sekali, lalu dikurangi aktivitas dan penutupan. Waktu kosong bukan izin.',
+          ),
+        );
+        await t.pumpAndSettle();
+        await capture(t, 'time-detail-$suffix');
         await tab('Jadwal');
         await t.tap(find.text('Hitung pratinjau'));
         await t.pumpAndSettle();
@@ -187,73 +198,173 @@ void main() {
     expect(find.text('Email dikirim ulang'), findsOneWidget);
   });
 
-  testWidgets('auth, account and all five time-form variants render', (
+  testWidgets('narrow large text handles empty, long, late and failed forms', (
     t,
   ) async {
-    t.view.physicalSize = const Size(412, 915);
+    t.view.physicalSize = const Size(360, 780);
     t.view.devicePixelRatio = 1;
+    t.platformDispatcher.textScaleFactorTestValue = 1.8;
     addTearDown(() {
       t.view.resetPhysicalSize();
       t.view.resetDevicePixelRatio();
+      t.view.resetViewInsets();
+      t.platformDispatcher.clearTextScaleFactorTestValue();
     });
-    Future<void> show(Widget screen, String name) async {
-      await t.pumpWidget(
-        RepaintBoundary(
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            key: UniqueKey(),
-            theme: buildTheme(),
-            home: screen,
-          ),
+    final p = PlannerController(
+      initial: PlannerSnapshot(
+        revision: 0,
+        tasks: [],
+        timeWindows: [],
+        activities: [],
+        sessions: [],
+      ),
+    );
+    await t.pumpWidget(
+      RepaintBoundary(
+        child: WaktuTugasApp(auth: AuthController()..enterDemo(), planner: p),
+      ),
+    );
+    await t.pumpAndSettle();
+    await capture(t, 'empty-home-360-1.8');
+    for (final label in ['Tugas', 'Waktu', 'Jadwal']) {
+      await t.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text(label),
         ),
       );
       await t.pumpAndSettle();
-      await capture(t, name);
+      await capture(t, 'empty-${label.toLowerCase()}-360-1.8');
     }
-
-    final p = PlannerController();
-    await show(LoginScreen(auth: RegistrationAuth()), 'login-412');
-    await t.ensureVisible(find.text('Belum punya akun? Daftar'));
-    await t.tap(find.text('Belum punya akun? Daftar'));
-    await t.pumpAndSettle();
-    await capture(t, 'register-412');
-    await show(LoginScreen(auth: AuthController()), 'local-demo-412');
-    await show(AccountScreen(auth: AuthController()), 'account-412');
-    await t.runAsync(p.generatePreview);
-    await show(ReasonsScreen(planner: p), 'reasons-412');
-    await show(TimeFormScreen(planner: p), 'extra-range-412');
-    await show(
-      TimeFormScreen(
-        planner: p,
-        window: TimeWindow(
-          id: 'weekly',
-          weekday: 1,
-          startMinute: 1140,
-          endMinute: 1320,
-        ),
+    final title = List.filled(10, 'Penelitian').join(' ');
+    await t.runAsync(
+      () => p.saveTask(
+        title: title,
+        course: 'Mata kuliah dengan nama panjang',
+        deadline: p.now.subtract(const Duration(days: 1)),
+        remaining: 99999,
       ),
-      'weekly-range-412',
     );
-    for (final kind in ActivityKind.values) {
-      await show(
-        TimeFormScreen(
-          planner: p,
-          activity: true,
-          window: Activity(
-            id: 'activity',
-            kind: kind,
-            label: 'Kegiatan belajar',
-            weekday: kind == ActivityKind.routine ? 1 : null,
-            date: kind == ActivityKind.routine ? null : '2026-11-09',
-            startMinute: 1140,
-            endMinute: 1200,
-          ),
-        ),
-        'activity-${kind.name}-412',
-      );
-    }
+    await t.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Tugas'),
+      ),
+    );
+    await t.pumpAndSettle();
+    await capture(t, 'long-late-task-360-1.8');
+    await t.ensureVisible(find.byTooltip('Hapus $title'));
+    final delete = t.getSize(find.byTooltip('Hapus $title'));
+    expect(delete.width, greaterThanOrEqualTo(48));
+    expect(delete.height, greaterThanOrEqualTo(48));
+    await t.tap(find.byTooltip('Tambah tugas'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('remaining')), '-1');
+    await t.tap(find.text('Simpan tugas'));
+    await t.pumpAndSettle();
+    expect(find.text('Nama wajib diisi.'), findsOneWidget);
+    expect(find.text('-1'), findsOneWidget);
+    t.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await t.pumpAndSettle();
+    expect(find.text('Simpan tugas').hitTestable(), findsOneWidget);
+    await t.ensureVisible(find.text('Masukkan menit bulat positif.'));
+    await t.pumpAndSettle();
+    await capture(t, 'invalid-keyboard-360-1.8');
   });
 
+  testWidgets('keyboard traverses authentication fields', (t) async {
+    await t.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(),
+        home: LoginScreen(auth: RegistrationAuth()),
+      ),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.byType(TextFormField).first);
+    await t.sendKeyEvent(LogicalKeyboardKey.tab);
+    await t.pump();
+    expect(
+      t.widget<EditableText>(find.byType(EditableText).last).focusNode.hasFocus,
+      isTrue,
+    );
+    expect(t.takeException(), isNull);
+  });
+
+  for (final width in [360.0, 412.0]) {
+    for (final scale in [1.0, 1.8]) {
+      testWidgets('auth, account and time forms at $width and $scale', (
+        t,
+      ) async {
+        t.view.physicalSize = Size(width, 915);
+        t.view.devicePixelRatio = 1;
+        t.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(() {
+          t.view.resetPhysicalSize();
+          t.view.resetDevicePixelRatio();
+          t.platformDispatcher.clearTextScaleFactorTestValue();
+        });
+        Future<void> show(Widget screen, String name) async {
+          await t.pumpWidget(
+            RepaintBoundary(
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                key: UniqueKey(),
+                theme: buildTheme(),
+                home: screen,
+              ),
+            ),
+          );
+          await t.pumpAndSettle();
+          await capture(
+            t,
+            width == 412 && scale == 1 ? name : '$name-${width.toInt()}-$scale',
+          );
+        }
+
+        final p = PlannerController();
+        await show(LoginScreen(auth: RegistrationAuth()), 'login-412');
+        await t.ensureVisible(find.text('Belum punya akun? Daftar'));
+        await t.tap(find.text('Belum punya akun? Daftar'));
+        await t.pumpAndSettle();
+        await capture(t, 'register-${width.toInt()}-$scale');
+        await show(LoginScreen(auth: AuthController()), 'local-demo-412');
+        await show(AccountScreen(auth: AuthController()), 'account-412');
+        await t.runAsync(p.generatePreview);
+        await show(ReasonsScreen(planner: p), 'reasons-412');
+        await show(TimeFormScreen(planner: p), 'extra-range-412');
+        await show(
+          TimeFormScreen(
+            planner: p,
+            window: TimeWindow(
+              id: 'weekly',
+              weekday: 1,
+              startMinute: 1140,
+              endMinute: 1320,
+            ),
+          ),
+          'weekly-range-412',
+        );
+        for (final kind in ActivityKind.values) {
+          await show(
+            TimeFormScreen(
+              planner: p,
+              activity: true,
+              window: Activity(
+                id: 'activity',
+                kind: kind,
+                label: 'Kegiatan belajar',
+                weekday: kind == ActivityKind.routine ? 1 : null,
+                date: kind == ActivityKind.routine ? null : '2026-11-09',
+                startMinute: 1140,
+                endMinute: 1200,
+              ),
+            ),
+            'activity-${kind.name}-412',
+          );
+        }
+      });
+    }
+  }
   testWidgets(
     'stale preview cannot confirm and terminal sessions stay read-only',
     (t) async {
@@ -318,13 +429,22 @@ void main() {
   testWidgets('offline disables mutations and loading labels the wait', (
     t,
   ) async {
+    t.view.physicalSize = const Size(360, 915);
+    t.view.devicePixelRatio = 1;
+    addTearDown(() {
+      t.view.resetPhysicalSize();
+      t.view.resetDevicePixelRatio();
+    });
     await t.pumpWidget(
-      WaktuTugasApp(
-        auth: AuthController()..enterDemo(),
-        planner: OfflinePlanner(),
+      RepaintBoundary(
+        child: WaktuTugasApp(
+          auth: AuthController()..enterDemo(),
+          planner: OfflinePlanner(),
+        ),
       ),
     );
     await t.pumpAndSettle();
+    await capture(t, 'offline-360');
     expect(find.text('Luring · hanya baca'), findsOneWidget);
     await t.tap(
       find
@@ -340,13 +460,16 @@ void main() {
     );
     expect(add.onPressed, isNull);
     await t.pumpWidget(
-      WaktuTugasApp(
-        key: UniqueKey(),
-        auth: AuthController()..enterDemo(),
-        planner: LoadingPlanner(),
+      RepaintBoundary(
+        child: WaktuTugasApp(
+          key: UniqueKey(),
+          auth: AuthController()..enterDemo(),
+          planner: LoadingPlanner(),
+        ),
       ),
     );
     await t.pump();
+    await capture(t, 'loading-360');
     expect(find.text('Menyiapkan ruang fokus'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
@@ -370,11 +493,13 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
-    final motion = find.descendant(
-      of: find.byType(AppButton).first,
-      matching: find.byType(AnimatedContainer),
-    );
-    expect(t.widget<AnimatedContainer>(motion).duration, Duration.zero);
+    final button = find.byType(AppButton).first;
+    final before = t.getRect(button);
+    final press = await t.startGesture(t.getCenter(button));
+    await t.pump(const Duration(milliseconds: 120));
+    expect(t.getRect(button), before);
+    await press.cancel();
+    await t.pumpAndSettle();
     for (final label in ['Tugas', 'Waktu', 'Jadwal', 'Ringkasan']) {
       await t.tap(
         find

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
+import '../../app/theme.dart';
 import '../../planner/models.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
@@ -202,142 +204,221 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                   onCancel: locked ? null : () => Navigator.pop(context),
                 ),
                 children: [
-                  if (widget.activity) ...[
-                    DropdownButtonFormField<ActivityKind>(
-                      initialValue: kind,
-                      decoration: const InputDecoration(
-                        labelText: 'Jenis kegiatan',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: ActivityKind.routine,
-                          child: Text('Rutin mingguan'),
-                        ),
-                        DropdownMenuItem(
-                          value: ActivityKind.event,
-                          child: Text('Kegiatan sekali'),
-                        ),
-                        DropdownMenuItem(
-                          value: ActivityKind.blocked,
-                          child: Text('Penutupan waktu'),
-                        ),
-                      ],
-                      onChanged: fieldsLocked
-                          ? null
-                          : (v) => setState(() {
-                              kind = v!;
-                              weekly = kind == ActivityKind.routine;
-                            }),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: label,
-                      enabled: !fieldsLocked,
-                      maxLength: 120,
-                      decoration: const InputDecoration(
-                        labelText: 'Label kegiatan (opsional)',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ] else ...[
-                    DropdownButtonFormField<bool>(
-                      key: const Key('scope'),
-                      initialValue: weekly,
-                      decoration: const InputDecoration(
-                        labelText: 'Pola rentang',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: false,
-                          child: Text('Tanggal tertentu'),
-                        ),
-                        DropdownMenuItem(value: true, child: Text('Mingguan')),
-                      ],
-                      onChanged: fieldsLocked
-                          ? null
-                          : (v) => setState(() => weekly = v!),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (weekly)
-                    DropdownButtonFormField<int>(
-                      initialValue: weekday,
-                      decoration: const InputDecoration(
-                        labelText: 'Hari setiap minggu *',
-                      ),
-                      items: [
-                        for (var i = 0; i < 7; i++)
-                          DropdownMenuItem(
-                            value: i + 1,
-                            child: Text(weekdays[i]),
+                  PageHeading(
+                    widget.activity
+                        ? 'Jaga ruang\nuntuk hidup.'
+                        : 'Sediakan waktu\nuntuk maju.',
+                    widget.activity
+                        ? 'Kegiatan dan penutupan mengurangi waktu pengerjaan.'
+                        : 'Tentukan kapan tugas boleh dikerjakan.',
+                  ),
+                  PaperCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.activity) ...[
+                          DropdownButtonFormField<ActivityKind>(
+                            isExpanded: true,
+                            isDense: false,
+                            itemHeight: null,
+                            initialValue: kind,
+                            decoration: const InputDecoration(
+                              labelText: 'Jenis kegiatan',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: ActivityKind.routine,
+                                child: Text('Rutin mingguan'),
+                              ),
+                              DropdownMenuItem(
+                                value: ActivityKind.event,
+                                child: Text('Kegiatan sekali'),
+                              ),
+                              DropdownMenuItem(
+                                value: ActivityKind.blocked,
+                                child: Text('Penutupan waktu'),
+                              ),
+                            ],
+                            onChanged: fieldsLocked
+                                ? null
+                                : (v) => setState(() {
+                                    kind = v!;
+                                    weekly = kind == ActivityKind.routine;
+                                  }),
                           ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: label,
+                            enabled: !fieldsLocked,
+                            maxLength: 120,
+                            decoration: const InputDecoration(
+                              labelText: 'Label kegiatan (opsional)',
+                              hintText: 'Contoh: Kuliah Sistem Operasi',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ] else ...[
+                          DropdownButtonFormField<bool>(
+                            isExpanded: true,
+                            isDense: false,
+                            itemHeight: null,
+                            key: const Key('scope'),
+                            initialValue: weekly,
+                            decoration: const InputDecoration(
+                              labelText: 'Pola rentang',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: false,
+                                child: Text('Tanggal tertentu'),
+                              ),
+                              DropdownMenuItem(
+                                value: true,
+                                child: Text('Mingguan'),
+                              ),
+                            ],
+                            onChanged: fieldsLocked
+                                ? null
+                                : (v) => setState(() => weekly = v!),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        if (weekly)
+                          DropdownButtonFormField<int>(
+                            isExpanded: true,
+                            isDense: false,
+                            itemHeight: null,
+                            initialValue: weekday,
+                            decoration: const InputDecoration(
+                              labelText: 'Hari setiap minggu *',
+                            ),
+                            items: [
+                              for (var i = 0; i < 7; i++)
+                                DropdownMenuItem(
+                                  value: i + 1,
+                                  child: Text(weekdays[i]),
+                                ),
+                            ],
+                            onChanged: fieldsLocked
+                                ? null
+                                : (v) => setState(() => weekday = v!),
+                          )
+                        else ...[
+                          PickerField(
+                            label: dateRange ? 'Tanggal mulai *' : 'Tanggal *',
+                            value: DateFormat(
+                              'd MMM yyyy',
+                              'id_ID',
+                            ).format(date),
+                            icon: 'imgCalendar',
+                            onTap: fieldsLocked ? null : () => pickDate(),
+                          ),
+                          if (dateRange) ...[
+                            const SizedBox(height: 16),
+                            PickerField(
+                              label: 'Tanggal akhir *',
+                              value: DateFormat(
+                                'd MMM yyyy',
+                                'id_ID',
+                              ).format(endDate),
+                              icon: 'imgCalendar',
+                              onTap: fieldsLocked
+                                  ? null
+                                  : () => pickDate(last: true),
+                            ),
+                          ],
+                        ],
+                        const SizedBox(height: 16),
+                        SectionHeader(
+                          title: widget.activity
+                              ? 'Jam kegiatan'
+                              : 'Jam pengerjaan',
+                          subtitle: 'Gunakan format 24 jam dalam WIB.',
+                        ),
+                        ResponsiveFields(
+                          first: TextFormField(
+                            key: const Key('start-time'),
+                            controller: start,
+                            enabled: !fieldsLocked,
+                            keyboardType: TextInputType.datetime,
+                            decoration: InputDecoration(
+                              labelText: 'Mulai · WIB *',
+                              suffixIcon: IconButton(
+                                tooltip: 'Pilih jam mulai',
+                                icon: const DesignIcon(
+                                  'imgClock',
+                                  size: 20,
+                                  color: AppColors.inkSecondary,
+                                ),
+                                onPressed: fieldsLocked
+                                    ? null
+                                    : () => pickTime(start),
+                              ),
+                            ),
+                            validator: (v) => parseTime(v ?? '') == null
+                                ? 'Jam mulai harus 00:00–23:59.'
+                                : null,
+                          ),
+                          second: TextFormField(
+                            key: const Key('end-time'),
+                            controller: end,
+                            enabled: !fieldsLocked,
+                            keyboardType: TextInputType.datetime,
+                            decoration: InputDecoration(
+                              labelText: 'Selesai · WIB *',
+                              suffixIcon: IconButton(
+                                tooltip: 'Pilih jam selesai',
+                                icon: const DesignIcon(
+                                  'imgClock',
+                                  size: 20,
+                                  color: AppColors.inkSecondary,
+                                ),
+                                onPressed: fieldsLocked
+                                    ? null
+                                    : () => pickTime(end),
+                              ),
+                            ),
+                            validator: (v) {
+                              final a = parseTime(start.text),
+                                  b = parseTime(v ?? '', allowEnd: true);
+                              if (b == null) {
+                                return 'Jam selesai harus 00:01–24:00.';
+                              }
+                              return a != null && b <= a
+                                  ? 'Jam selesai harus setelah mulai.'
+                                  : null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: DesignIcon(
+                                'imgInfo',
+                                size: 15,
+                                color: AppColors.inkMuted,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Batas waktu yang jelas: jika melewati tengah malam, buat dua rentang pada dua hari. 24:00 hanya boleh sebagai waktu selesai.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.4,
+                                  color: AppColors.inkSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
-                      onChanged: fieldsLocked
-                          ? null
-                          : (v) => setState(() => weekday = v!),
-                    )
-                  else ...[
-                    PickerField(
-                      label: dateRange ? 'Tanggal mulai *' : 'Tanggal *',
-                      value: date.toIso8601String().substring(0, 10),
-                      icon: 'imgCalendar',
-                      onTap: fieldsLocked ? null : () => pickDate(),
-                    ),
-                    if (dateRange) ...[
-                      const SizedBox(height: 16),
-                      PickerField(
-                        label: 'Tanggal akhir *',
-                        value: endDate.toIso8601String().substring(0, 10),
-                        icon: 'imgCalendar',
-                        onTap: fieldsLocked ? null : () => pickDate(last: true),
-                      ),
-                    ],
-                  ],
-                  const SizedBox(height: 16),
-                  ResponsiveFields(
-                    first: TextFormField(
-                      key: const Key('start-time'),
-                      controller: start,
-                      enabled: !fieldsLocked,
-                      keyboardType: TextInputType.datetime,
-                      decoration: InputDecoration(
-                        labelText: 'Mulai · WIB *',
-                        suffixIcon: IconButton(
-                          tooltip: 'Pilih jam mulai',
-                          icon: const DesignIcon('imgClock', size: 20),
-                          onPressed: fieldsLocked
-                              ? null
-                              : () => pickTime(start),
-                        ),
-                      ),
-                      validator: (v) => parseTime(v ?? '') == null
-                          ? 'Jam mulai harus 00:00–23:59.'
-                          : null,
-                    ),
-                    second: TextFormField(
-                      key: const Key('end-time'),
-                      controller: end,
-                      enabled: !fieldsLocked,
-                      keyboardType: TextInputType.datetime,
-                      decoration: InputDecoration(
-                        labelText: 'Selesai · WIB *',
-                        suffixIcon: IconButton(
-                          tooltip: 'Pilih jam selesai',
-                          icon: const DesignIcon('imgClock', size: 20),
-                          onPressed: fieldsLocked ? null : () => pickTime(end),
-                        ),
-                      ),
-                      validator: (v) {
-                        final a = parseTime(start.text),
-                            b = parseTime(v ?? '', allowEnd: true);
-                        if (b == null) return 'Jam selesai harus 00:01–24:00.';
-                        return a != null && b <= a
-                            ? 'Jam selesai harus setelah mulai.'
-                            : null;
-                      },
                     ),
                   ),
-                  const SizedBox(height: 16),
                   Notice(
                     title: widget.activity
                         ? kind == ActivityKind.blocked
@@ -348,20 +429,21 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                         ? 'Kegiatan dan penutupan memotong waktu yang diizinkan. Tambahan waktu tidak membuka rentang yang ditutup.'
                         : 'Waktu di luar rentang kerja tidak otomatis tersedia, meskipun kalender kosong. Rentang bertumpuk dihitung sekali.',
                   ),
-                  const Notice(
-                    title: 'Batas waktu yang jelas',
-                    message:
-                        'Jika melewati tengah malam, buat dua rentang pada dua hari. 24:00 hanya boleh sebagai waktu selesai.',
-                  ),
                   if (dateRange)
-                    Text(
-                      'Disimpan sebagai satu penutupan per tanggal. ${savedDays > 0 ? '$savedDays tanggal sudah tersimpan; melanjutkan tidak mengulang tanggal tersebut.' : 'Jika sebagian gagal, tanggal yang berhasil tetap tersimpan.'}',
-                      style: const TextStyle(fontSize: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Disimpan sebagai satu penutupan per tanggal. ${savedDays > 0 ? '$savedDays tanggal sudah tersimpan; melanjutkan tidak mengulang tanggal tersebut.' : 'Jika sebagian gagal, tanggal yang berhasil tetap tersimpan.'}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
                     ),
                   ErrorNotice(localError ?? p.error),
                   const Text(
                     '* Wajib diisi · simpan tidak otomatis mengganti jadwal terkonfirmasi.',
-                    style: TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
                   ),
                 ],
               ),

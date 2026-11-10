@@ -1,34 +1,117 @@
-﻿# WaktuTugas — demo lokal Flutter
+# WaktuTugas
 
-Implementasi Task 1–3 dari [rencana](docs/Rencana_Implementasi_WaktuTugas.md), berdasarkan [PRD 1.2](PRD_WaktuTugas_Ahmad_Turmudi_60324069.md). Target aplikasi Android. Data sintetis hanya berada di memori; keluar/restart mengembalikan fixture. Tidak ada proyek cloud, kredensial, atau persistensi token yang diaktifkan.
+Aplikasi Android berbasis Flutter + Supabase untuk membantu mahasiswa mengalokasikan sisa pengerjaan tugas ke rentang waktu yang benar-benar diizinkan sebelum tenggat, melihat pratinjau jadwal 14 hari (WIB), mengonfirmasi jadwal secara atomik, serta mencatat progres belajar.
 
-## Toolchain yang ditemukan
+- **Pemilik Proyek:** Ahmad Turmudi (NIM 60324069)
+- **Mata Kuliah:** Pemrograman Berbasis Platform (INF2528) — UIN K.H. Abdurrahman Wahid Pekalongan
+- **Spesifikasi:** [PRD_WaktuTugas_Ahmad_Turmudi_60324069.md](PRD_WaktuTugas_Ahmad_Turmudi_60324069.md) (Versi 1.2)
 
-- Flutter 3.44.8 stable; Dart 3.12.2 (bundel Flutter).
-- Android SDK 36.0.0, platform android-36.1, build tools 36.0.0; lokasi D:/Android/Sdk.
-- Flutter doctor memilih Java Android Studio JBR 25.0.3. Template mengompilasi Java/Kotlin untuk Java 17; kompatibilitas Gradle belum dibuktikan dengan build Android.
-- minSdk 24 dari flutter.minSdkVersion; persyaratan seluruh plugin perlu diverifikasi saat build Android.
-- Tidak ada perangkat Android/AVD. Sebagian lisensi Android belum diterima. Visual Studio tidak diperlukan untuk target Android.
+---
 
-## Menjalankan
+## 1. Lingkungan & Toolchain yang Tercatat
 
-Dari root workspace:
+* **Flutter:** `3.44.8` (channel `stable`)
+* **Dart:** `3.12.2` (dibundel bersama Flutter)
+* **Android SDK:** `36.0.0` (platform `android-36.1`, build-tools `36.0.0`, `minSdkVersion` mengikuti konfigurasi Flutter `24`)
+* **Java / JDK:** Android Studio JBR `25.0.3` (kompilasi Gradle ditargetkan ke Java `17`)
+* **Supabase CLI:** `3.0.0`
 
+---
+
+## 2. Mode Operasi: Demo Lokal vs Backend Supabase
+
+Aplikasi membedakan secara eksplisit antara **Mode Demo Lokal** dan **Mode Backend Daring**:
+
+1. **Mode Demo Lokal (Default tanpa `--dart-define`):**
+   * Aktif apabila `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY` tidak diberikan saat menjalankan atau mem-build aplikasi.
+   * Menampilkan penanda eksplisit **`Demo lokal`** dengan dataset sintetis PRD Bagian 4.4 (`9 November 2026 pukul 18.00 WIB`, tugas `T01`, `T02`, `T03`).
+   * Seluruh perubahan hanya berada di memori selama aplikasi terbuka dan direset saat keluar atau aplikasi dimulai ulang.
+2. **Mode Backend Daring (Dengan `--dart-define`):**
+   * Aktif apabila `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY` diberikan melalui `--dart-define`.
+   * Mengaktifkan Supabase Auth (masuk, daftar, konfirmasi email, keluar akun), penyimpanan sesi terenkripsi (`flutter_secure_storage` melalui `SecureLocalStorage`), pembacaan snapshot & mutasi RPC transaksional (`PlannerApi`), serta cache baca luring SQLite per `user_id` (`LocalCache`).
+   * **Keamanan Kredensial:** Hanya *publishable / anon key* yang boleh dikirim melalui `--dart-define`. Jangan pernah menaruh `service_role` key atau secret database di aplikasi, repositori, maupun log.
+
+---
+
+## 3. Struktur Database & Migrasi Supabase
+
+Seluruh definisi database berada pada folder `supabase/migrations/`:
+
+1. [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql):
+   * Lima tabel sesuai PRD Bagian 6: `planner_state`, `tasks`, `time_windows`, `activities`, dan `sessions`.
+   * Constraint integritas durasi positif, batas menit harian (`0..1439` dan `1..1440`), target eksklusif `weekday` vs `date`, kelipatan menit penuh pada sesi, kesesuaian field status sesi (`completed`/`missed`/`planned`/`cancelled`), foreign key gabungan `(task_id, user_id)` ke `tasks(id, user_id) ON DELETE CASCADE`, serta indeks per pengguna.
+2. [`supabase/migrations/002_policies.sql`](supabase/migrations/002_policies.sql):
+   * Mengaktifkan Row Level Security (`ENABLE ROW LEVEL SECURITY`) pada kelima tabel.
+   * Kebijakan `SELECT` khusus `authenticated` dengan filter `auth.uid() = user_id`.
+   * Mencabut seluruh izin tulis langsung (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`) dari `PUBLIC`, `anon`, dan `authenticated` agar seluruh mutasi wajib melewati RPC ber-revisi.
+3. [`supabase/migrations/003_rpc.sql`](supabase/migrations/003_rpc.sql):
+   * Fungsi `SECURITY DEFINER` dengan `SET search_path = ''` dan kualifikasi skema eksplisit (`public.*`).
+   * `get_planner_snapshot()` serta 8 mutator atomik: `save_task`, `delete_task`, `save_time_window`, `delete_time_window`, `save_activity`, `delete_activity`, `record_progress`, dan `confirm_schedule`.
+   * Setiap mutator memverifikasi `auth.uid()`, mengunci baris `planner_state` pengguna (`FOR UPDATE`), memvalidasi `expected_revision` / `input_revision` (`STALE_REVISION` `P0002`), memvalidasi seluruh invariant bisnis di server, dan menaikkan `revision + 1` dalam satu transaksi.
+
+Detail kontrak RPC dan kode error didokumentasikan di [`docs/API.md`](docs/API.md).
+
+---
+
+## 4. Cara Menjalankan
+
+### 4.1 Pemeriksaan Kualitas Kode & Pengujian Lokal (Tanpa Docker / Perangkat)
 ```powershell
 flutter pub get
-flutter analyze
-flutter test
+flutter analyze --no-pub
 dart format --output=none --set-exit-if-changed lib test integration_test
-flutter devices
-flutter run -d <id-perangkat-android>
+flutter test --no-pub test/planner test/ui test/data
 ```
 
-Untuk lisensi, jalankan sendiri `flutter doctor --android-licenses`, baca setiap lisensi dan jawab `y` jika menyetujui. Lalu `flutter doctor -v`. Siapkan emulator dari Android Studio > Device Manager atau sambungkan ponsel dengan USB debugging, lalu periksa `flutter devices`.
+### 4.2 Menjalankan Backend Supabase Lokal & Pengujian Database (Membutuhkan Docker Desktop Aktif)
+Pastikan Docker Desktop sudah berjalan (`docker info`), lalu jalankan dari root repositori:
+```powershell
+$env:SUPABASE_TELEMETRY_DISABLED='1'
+supabase start
+supabase test db
+```
+Untuk menjalankan pengujian konkurensi dan isolasi dua klien Dart terhadap Supabase lokal (`test/backend/planner_rpc_test.dart`), siapkan dua akun uji kosong pada instance lokal lalu jalankan:
+```powershell
+$env:SUPABASE_URL='http://127.0.0.1:54321'
+$env:SUPABASE_PUBLISHABLE_KEY='<anon-key-lokal-dari-supabase-status>'
+$env:WAKTUTUGAS_TEST_A_EMAIL='test-a@example.com'
+$env:WAKTUTUGAS_TEST_A_PASSWORD='<password-uji-a>'
+$env:WAKTUTUGAS_TEST_B_EMAIL='test-b@example.com'
+$env:WAKTUTUGAS_TEST_B_PASSWORD='<password-uji-b>'
+flutter test --no-pub test/backend/planner_rpc_test.dart
+```
 
-Dependensi PRD dikunci di pubspec.lock. Jangan upgrade saat build. SDK Supabase, secure storage, SQLite, dan konektivitas sudah dideklarasikan untuk tahap selanjutnya tetapi belum diinisialisasi/dipakai. Tidak ada token disimpan melalui SharedPreferences.
+### 4.3 Menjalankan Aplikasi & Build Android
+Menjalankan dalam mode demo lokal:
+```powershell
+flutter run -d <id-perangkat>
+```
+Menjalankan atau mem-build APK release dengan backend Supabase:
+```powershell
+flutter run -d <id-perangkat> `
+  --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co `
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<supabase-publishable-key>
 
-## Tinjauan
+flutter build apk --release `
+  --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co `
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<supabase-publishable-key>
+```
+Menjalankan integration test pada perangkat/emulator Android:
+```powershell
+flutter test integration_test/storage_test.dart -d <id-perangkat-android>
+flutter test integration_test/app_flow_test.dart -d <id-perangkat-android>
+```
 
-Buka demo lokal. Fixture memakai 9 November 2026 pukul 18.00 WIB, bukan jam perangkat. T01 240 menit, T02 120 menit, T03 180 menit; kapasitas bersih 420 menit. Implementasi dan hasil pengujian per tahap dicatat di [progress](docs/PROGRESS.md).
+---
 
-Android smoke test, plugin nyata, APK, keamanan/RLS dan transaksi backend belum diverifikasi. Supabase CLI belum tersedia pada environment ini, sehingga Task 4 belum dimulai. Signing release masih template debug dan bukan konfigurasi rilis produksi.
+## 5. Status Pengujian & Pekerjaan yang Masih Tertunda
+
+Catatan lengkap progres dan matriks penerimaan (`AC01–AC18`) tersedia di:
+* [`docs/PROGRESS.md`](docs/PROGRESS.md)
+* [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md)
+
+**Ringkasan status saat ini:**
+* **Selesai & Lulus Lokal:** Mesin penjadwalan Dart murni (`AC03–AC10`), seluruh layar UI dan formulir responsif, autentikasi & sesi terenkripsi (`SecureLocalStorage`), klien RPC (`PlannerApi`), cache baca luring SQLite per akun (`LocalCache`), penanganan timeout & konflik revisi (`STALE_REVISION`), serta kompilasi APK release Android (`flutter analyze` 0 masalah, 38 pengujian lokal di `test/planner`, `test/ui`, dan `test/data` lulus).
+* **Menunggu Prasyarat Lingkungan Eksternal:**
+  1. **Eksekusi runtime SQL pgTAP (`supabase test db`) & `test/backend/planner_rpc_test.dart`:** Membutuhkan Docker Engine (`dockerDesktopLinuxEngine`) yang aktif untuk menjalankan PostgreSQL lokal Supabase, atau proyek Supabase uji dengan 2 akun uji kosong.
+  2. **Eksekusi `integration_test` pada perangkat Android:** Membutuhkan perangkat Android fisik (USB debugging) atau Android Virtual Device (AVD) yang aktif pada `flutter devices`.

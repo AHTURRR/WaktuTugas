@@ -81,71 +81,127 @@ class _SessionScreenState extends State<SessionScreen> {
                         ? null
                         : () => setState(() => recording = false),
                   )
+                : s.status == SessionStatus.planned
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppButton(
+                        label: 'Selesai dikerjakan',
+                        icon: 'imgCheck',
+                        onPressed: !canClose || locked
+                            ? null
+                            : () => setState(() => recording = true),
+                      ),
+                      const SizedBox(height: 10),
+                      AppButton(
+                        label: 'Tandai terlewat',
+                        icon: 'imgSkipForward',
+                        secondary: true,
+                        onPressed: !canClose || locked
+                            ? null
+                            : () => save(SessionStatus.missed),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  )
                 : null,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.lime,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const DesignIcon('imgCheckSquare'),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task?.title ?? s.taskId,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        if (task?.course != null) Text(task!.course!),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              PaperCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    StatusBadge(
-                      statusLabel(s.status),
-                      icon: s.status == SessionStatus.completed
-                          ? 'imgCheckCircle'
-                          : s.status == SessionStatus.missed
-                          ? 'imgAlertCircle'
-                          : 'imgClock',
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      dateLabel(s.startsAt),
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '${clockLabel(s.startsAt)}–${clockLabel(s.endsAt)} WIB',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Durasi rencana · ${s.endsAt.difference(s.startsAt).inMinutes} menit',
-                    ),
-                    if (task != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Tenggat tugas · ${dateTimeLabel(task.deadlineAt)}',
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ],
-                  ],
+              if (recording && canClose)
+                SectionHeader(
+                  title: task?.title ?? s.taskId,
+                  subtitle:
+                      '${clockLabel(s.startsAt)} \u2013 ${clockLabel(s.endsAt)} WIB',
+                )
+              else
+                FocusPanel(
+                  eyebrow: recording ? 'PROGRES SESI' : 'SESI FOKUS',
+                  icon: 'imgCheckSquare',
+                  title: task?.title ?? s.taskId,
+                  description: task?.course,
                 ),
-              ),
+              if (!recording)
+                PaperCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          StatusBadge(
+                            statusLabel(s.status),
+                            icon: s.status == SessionStatus.completed
+                                ? 'imgCheckCircle'
+                                : s.status == SessionStatus.missed
+                                ? 'imgAlertCircle'
+                                : 'imgClock',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        dateLabel(s.startsAt),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${clockLabel(s.startsAt)}–${clockLabel(s.endsAt)} WIB',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1),
+                      ),
+                      Row(
+                        children: [
+                          const DesignIcon(
+                            'imgClock',
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Durasi rencana · ${s.endsAt.difference(s.startsAt).inMinutes} menit',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (task != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const DesignIcon(
+                              'imgCalendar',
+                              size: 16,
+                              color: AppColors.inkMuted,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Tenggat tugas · ${dateTimeLabel(task.deadlineAt)}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.inkSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               if (s.status != SessionStatus.planned) ...[
                 Notice(
                   title: 'Hanya baca · sesi sudah ditutup',
@@ -158,70 +214,106 @@ class _SessionScreenState extends State<SessionScreen> {
                       'Sesi dibatalkan saat rencana diganti. Tidak ada progres yang dicatat.',
                   },
                 ),
-                Text(
-                  '${task?.remainingMinutes ?? 0} menit tersisa',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const Text(
-                  'Status akhir sesi tidak dapat diubah dari tampilan ini.',
+                PaperCard(
+                  color: AppColors.surfaceMuted,
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Sisa pekerjaan saat ini',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.inkMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${task?.remainingMinutes ?? 0} menit tersisa',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Status akhir sesi tidak dapat diubah dari tampilan ini.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ] else if (recording && canClose) ...[
-                Text(
-                  'Sisa sebelum sesi · ${task?.remainingMinutes ?? 0} menit',
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: const Key('remaining-after'),
-                  controller: remaining,
-                  enabled: !locked,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Sisa aktual setelah sesi (menit) *',
-                    helperText:
-                        'Bilangan bulat ≥ 0. Boleh lebih besar dari sisa sebelumnya.',
+                PaperCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Sisa sebelum sesi · ${task?.remainingMinutes ?? 0} menit',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const SectionHeader(
+                        title: 'Berapa menit yang masih dibutuhkan?',
+                      ),
+                      TextFormField(
+                        key: const Key('remaining-after'),
+                        controller: remaining,
+                        enabled: !locked,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Sisa aktual (menit) *',
+                          helperText:
+                              'Bilangan bulat ≥ 0. Boleh lebih besar dari sisa sebelumnya.',
+                        ),
+                        validator: (v) {
+                          final n = int.tryParse(v ?? '');
+                          return n == null || n < 0
+                              ? 'Masukkan menit bulat nonnegatif.'
+                              : null;
+                        },
+                      ),
+                    ],
                   ),
-                  validator: (v) {
-                    final n = int.tryParse(v ?? '');
-                    return n == null || n < 0
-                        ? 'Masukkan menit bulat nonnegatif.'
-                        : null;
-                  },
                 ),
-                const SizedBox(height: 16),
                 const Notice(
                   title: 'Selesai sesi ≠ selesai tugas',
                   message:
                       'Tugas hanya selesai jika sisa aktual 0. Isi berdasarkan pekerjaan yang benar-benar masih tersisa.',
+                  color: AppColors.warning,
+                  icon: 'imgAlertCircle',
                 ),
                 const Text(
                   'Jika sesi terlewat, sisa menit tidak berubah. Tidak ada pengurangan otomatis berdasarkan durasi sesi.',
+                  style: TextStyle(fontSize: 12, color: AppColors.inkSecondary),
                 ),
               ] else ...[
                 Notice(
                   title: canClose ? 'Sesi sudah dimulai' : 'Sesi belum dimulai',
                   message:
                       '${dateTimeLabel(p.now)}. ${canClose ? 'Tutup sesi sebelum menyusun ulang jadwal.' : 'Progres hanya dapat dicatat setelah waktu mulai.'}',
-                  color: canClose ? AppColors.warning : AppColors.cyan,
+                  color: canClose ? AppColors.warning : AppColors.primarySoft,
+                  icon: canClose ? 'imgAlertCircle' : 'imgClock',
                 ),
-                AppButton(
-                  label: 'Selesai dikerjakan',
-                  icon: 'imgCheck',
-                  onPressed: !canClose || locked
-                      ? null
-                      : () => setState(() => recording = true),
-                ),
-                const SizedBox(height: 12),
-                AppButton(
-                  label: 'Tandai terlewat',
-                  icon: 'imgSkipForward',
-                  secondary: true,
-                  onPressed: !canClose || locked
-                      ? null
-                      : () => save(SessionStatus.missed),
-                ),
-                const SizedBox(height: 16),
                 const Text(
                   'Selesai dikerjakan membuka isian sisa aktual. Terlewat mempertahankan sisa tugas.',
+                  style: TextStyle(fontSize: 12, color: AppColors.inkSecondary),
                 ),
               ],
               ErrorNotice(p.error),

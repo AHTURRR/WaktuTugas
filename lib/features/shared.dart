@@ -44,10 +44,17 @@ class PageContent extends StatelessWidget {
         Expanded(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            padding: const EdgeInsets.fromLTRB(
+              AppLayout.page,
+              16,
+              AppLayout.page,
+              24,
+            ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: const BoxConstraints(
+                  maxWidth: AppLayout.contentWidth,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: children,
@@ -60,16 +67,102 @@ class PageContent extends StatelessWidget {
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xffd4d9d0))),
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.border)),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            padding: const EdgeInsets.fromLTRB(
+              AppLayout.page,
+              12,
+              AppLayout.page,
+              12,
+            ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: const BoxConstraints(
+                  maxWidth: AppLayout.contentWidth,
+                ),
                 child: SizedBox(width: double.infinity, child: actions),
               ),
             ),
           ),
+      ],
+    ),
+  );
+}
+
+class FocusPanel extends StatelessWidget {
+  final String eyebrow, title;
+  final String? description;
+  final Widget? footer;
+  final String icon;
+  const FocusPanel({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    this.description,
+    this.footer,
+    this.icon = 'imgClock1',
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 24),
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: AppColors.forest,
+      borderRadius: BorderRadius.circular(28),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppColors.lime,
+                shape: BoxShape.circle,
+              ),
+              child: DesignIcon(icon, size: 20, color: AppColors.forest),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                eyebrow,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.onForest,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: MediaQuery.textScalerOf(context).scale(14) > 18 ? 22 : 32,
+            height: 1.12,
+            letterSpacing: -1,
+            fontWeight: FontWeight.w700,
+            color: AppColors.surface,
+          ),
+        ),
+        if (description != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            description!,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: AppColors.onForest,
+            ),
+          ),
+        ],
+        if (footer != null) ...[const SizedBox(height: 24), footer!],
       ],
     ),
   );
@@ -80,13 +173,60 @@ class PageHeading extends StatelessWidget {
   const PageHeading(this.title, this.subtitle, {super.key});
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.only(bottom: AppLayout.section),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 8),
-        Text(subtitle),
+        const SizedBox(height: 12),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.5,
+            color: AppColors.inkSecondary,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        ?trailing,
       ],
     ),
   );
@@ -99,13 +239,13 @@ class ErrorNotice extends StatelessWidget {
   Widget build(BuildContext context) => message == null
       ? const SizedBox.shrink()
       : Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Semantics(
             liveRegion: true,
             child: Notice(
               title: 'Periksa kembali',
               message: message!,
-              color: AppColors.warning,
+              color: AppColors.errorSoft,
               icon: 'imgAlertCircle',
             ),
           ),
@@ -129,6 +269,10 @@ Future<bool> confirmDelete(
             child: const Text('Batal'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.surface,
+            ),
             onPressed: () => Navigator.pop(c, true),
             child: Text(action),
           ),
@@ -140,135 +284,131 @@ Future<bool> confirmDelete(
 class DesignIcon extends StatelessWidget {
   final String name;
   final double size;
-  const DesignIcon(this.name, {super.key, this.size = 24});
+  final Color? color;
+  const DesignIcon(this.name, {super.key, this.size = 24, this.color});
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: SvgPicture.asset(
-      'assets/figma/$name.svg',
-      width: size,
-      height: size,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final effectiveColor = color ?? IconTheme.of(context).color;
+    return ExcludeSemantics(
+      child: SvgPicture.asset(
+        'assets/figma/$name.svg',
+        width: size,
+        height: size,
+        colorFilter:
+            effectiveColor != null && name != 'imgWaktuTugasIllustrationSparkle'
+            ? ColorFilter.mode(effectiveColor, BlendMode.srcIn)
+            : null,
+      ),
+    );
+  }
 }
 
 class PaperCard extends StatelessWidget {
   final Widget child;
   final Color color;
+  final Color? borderColor;
   final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
   const PaperCard({
     super.key,
     required this.child,
-    this.color = AppColors.canvas,
-    this.padding = const EdgeInsets.all(14),
+    this.color = AppColors.surface,
+    this.borderColor,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = const EdgeInsets.only(bottom: 12),
   });
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 14, right: 4),
-    padding: padding,
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.ink, width: 2),
-      boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final resolvedBorder =
+        borderColor ??
+        (color == AppColors.warning
+            ? AppColors.warningBorder
+            : color == AppColors.errorSoft
+            ? AppColors.errorBorder
+            : color == AppColors.primarySoft
+            ? AppColors.primaryBorder
+            : color == AppColors.successSoft
+            ? AppColors.successBorder
+            : AppColors.border);
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(AppLayout.radius),
+        border: Border.all(color: resolvedBorder, width: 1),
+      ),
+      child: child,
+    );
+  }
 }
 
-class AppButton extends StatefulWidget {
+class AppButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final String label;
   final String? icon;
   final bool secondary;
+  final bool highlighted;
   const AppButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
     this.secondary = false,
+    this.highlighted = false,
   });
-  @override
-  State<AppButton> createState() => _AppButtonState();
-}
-
-class _AppButtonState extends State<AppButton> {
-  final states = WidgetStatesController();
-  @override
-  void initState() {
-    super.initState();
-    states.addListener(_changed);
-  }
-
-  void _changed() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) setState(() {});
-  });
-  @override
-  void dispose() {
-    states.removeListener(_changed);
-    states.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final pressed = states.value.contains(WidgetState.pressed);
-    return Padding(
-      padding: const EdgeInsets.only(right: 4, bottom: 4),
-      child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
-        transform: Matrix4.translationValues(
-          pressed ? 2 : 0,
-          pressed ? 2 : 0,
-          0,
+    final enabled = onPressed != null;
+    final fgColor = !enabled
+        ? AppColors.inkMuted
+        : secondary || highlighted
+        ? AppColors.ink
+        : AppColors.surface;
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: highlighted
+            ? AppColors.lime
+            : secondary
+            ? AppColors.surface
+            : AppColors.primary,
+        foregroundColor: fgColor,
+        disabledBackgroundColor: AppColors.surfaceMuted,
+        disabledForegroundColor: AppColors.inkMuted,
+        elevation: 0,
+        minimumSize: const Size(AppLayout.control, 56),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        textStyle: const TextStyle(
+          fontFamily: 'Plus Jakarta Sans',
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
         ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: widget.onPressed == null
-              ? []
-              : [
-                  BoxShadow(
-                    color: AppColors.ink,
-                    offset: Offset(pressed ? 2 : 4, pressed ? 2 : 4),
-                  ),
-                ],
-        ),
-        child: FilledButton(
-          statesController: states,
-          onPressed: widget.onPressed,
-          style: FilledButton.styleFrom(
-            backgroundColor: widget.secondary
-                ? AppColors.canvas
-                : AppColors.lime,
-            foregroundColor: AppColors.ink,
-            disabledBackgroundColor: const Color(0xffe3e3db),
-            disabledForegroundColor: const Color(0xff55554e),
-            minimumSize: const Size(48, 48),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            textStyle: const TextStyle(
-              fontFamily: 'Plus Jakarta Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.ink, width: 2),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.icon != null) ...[
-                DesignIcon(widget.icon!, size: 20),
-                const SizedBox(width: 8),
-              ],
-              Flexible(child: Text(widget.label, textAlign: TextAlign.center)),
-            ],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppLayout.radius),
+          side: BorderSide(
+            color: !enabled
+                ? AppColors.border
+                : highlighted
+                ? AppColors.lime
+                : secondary
+                ? AppColors.borderStrong
+                : AppColors.primaryDark,
+            width: 1,
           ),
         ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            DesignIcon(icon!, size: 18, color: fgColor),
+            const SizedBox(width: 8),
+          ],
+          Flexible(child: Text(label, textAlign: TextAlign.center)),
+        ],
       ),
     );
   }
@@ -283,58 +423,144 @@ class Notice extends StatelessWidget {
     super.key,
     required this.title,
     this.message,
-    this.color = AppColors.cyan,
+    this.color = AppColors.primarySoft,
     this.icon = 'imgInfo',
   });
   @override
-  Widget build(BuildContext context) => PaperCard(
-    color: color,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DesignIcon(icon, size: 20),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              if (message != null) ...[
-                const SizedBox(height: 4),
-                Text(message!, style: const TextStyle(fontSize: 13)),
-              ],
-            ],
+  Widget build(BuildContext context) {
+    final isWarning = color == AppColors.warning;
+    final isSuccess = color == AppColors.successSoft;
+    final isError = color == AppColors.errorSoft || color == AppColors.error;
+    final accentColor = isError
+        ? AppColors.error
+        : isWarning
+        ? AppColors.warningInk
+        : isSuccess
+        ? AppColors.success
+        : AppColors.primary;
+    final fillColor = isError
+        ? AppColors.errorSoft
+        : isWarning
+        ? AppColors.warning
+        : isSuccess
+        ? AppColors.successSoft
+        : AppColors.primarySoft;
+    return PaperCard(
+      color: fillColor,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: DesignIcon(icon, size: 18, color: accentColor),
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isError ? AppColors.error : AppColors.ink,
+                  ),
+                ),
+                if (message != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    message!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class StatusBadge extends StatelessWidget {
   final String label, icon;
   const StatusBadge(this.label, {super.key, this.icon = 'imgClock'});
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppColors.ink, width: 2),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DesignIcon(icon, size: 14),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) {
+    final lower = label.toLowerCase();
+    final isSuccess =
+        lower.contains('selesai') ||
+        lower.contains('terkonfirmasi') ||
+        lower.contains('daring');
+    final isDanger =
+        lower.contains('terlambat') ||
+        lower.contains('terlewat') ||
+        lower.contains('lewat');
+    final isWarning =
+        lower.contains('perlu') ||
+        lower.contains('kurang') ||
+        lower.contains('penuh') ||
+        lower.contains('horizon') ||
+        lower.contains('belum');
+    final isMuted = lower.contains('dibatalkan');
+
+    final Color bg;
+    final Color border;
+    final Color fg;
+    if (isSuccess) {
+      bg = AppColors.successSoft;
+      border = AppColors.successBorder;
+      fg = AppColors.success;
+    } else if (isDanger) {
+      bg = AppColors.errorSoft;
+      border = AppColors.errorBorder;
+      fg = AppColors.error;
+    } else if (isWarning) {
+      bg = AppColors.warning;
+      border = AppColors.warningBorder;
+      fg = AppColors.warningInk;
+    } else if (isMuted) {
+      bg = AppColors.surfaceMuted;
+      border = AppColors.borderStrong;
+      fg = AppColors.inkSecondary;
+    } else {
+      bg = AppColors.primarySoft;
+      border = AppColors.primaryBorder;
+      fg = AppColors.primaryDark;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: border, width: 1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DesignIcon(icon, size: 13, color: fg),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 String clockLabel(DateTime value) =>
@@ -353,54 +579,116 @@ class SessionCard extends StatelessWidget {
     this.invalid = false,
   });
   @override
-  Widget build(BuildContext context) => PaperCard(
-    padding: EdgeInsets.zero,
-    child: Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.lime,
-                  borderRadius: BorderRadius.circular(4),
+  Widget build(BuildContext context) {
+    final accentColor = invalid
+        ? AppColors.warningInk
+        : switch (session.status) {
+            SessionStatus.completed => AppColors.success,
+            SessionStatus.missed => AppColors.error,
+            SessionStatus.cancelled => AppColors.inkMuted,
+            SessionStatus.planned => AppColors.primary,
+          };
+    final statusIcon = switch (session.status) {
+      SessionStatus.completed => 'imgCheckCircle',
+      SessionStatus.missed => 'imgAlertCircle',
+      SessionStatus.cancelled => 'imgInfo',
+      SessionStatus.planned => invalid ? 'imgAlertCircle' : 'imgClock',
+    };
+    final largeText = MediaQuery.textScalerOf(context).scale(14) > 18;
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${session.endsAt.difference(session.startsAt).inMinutes} menit \u00b7 WIB',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            DesignIcon(statusIcon, size: 16, color: accentColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${statusLabel(session.status)}${invalid ? ' \u00b7 Perlu disusun ulang' : ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: accentColor,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title),
-                    Text(
-                      '${clockLabel(session.startsAt)}–${clockLabel(session.endsAt)} WIB · ${session.endsAt.difference(session.startsAt).inMinutes} menit',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    Text(
-                      '${statusLabel(session.status)}${invalid ? ' · Perlu disusun ulang' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+            ),
+          ],
+        ),
+      ],
+    );
+    final clock = Text(
+      '${clockLabel(session.startsAt)}\n${clockLabel(session.endsAt)}',
+      style: Theme.of(
+        context,
+      ).textTheme.titleMedium?.copyWith(color: accentColor),
+    );
+    return PaperCard(
+      padding: EdgeInsets.zero,
+      borderColor: invalid ? AppColors.warningBorder : AppColors.border,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppLayout.radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: largeText
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '${clockLabel(session.startsAt)} \u2013 ${clockLabel(session.endsAt)} WIB',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(color: accentColor),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const DesignIcon('imgChevronRight', size: 20),
-            ],
+                      const SizedBox(height: 12),
+                      details,
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 64,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: clock,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: details),
+                      const SizedBox(width: 8),
+                      const DesignIcon(
+                        'imgChevronRight',
+                        size: 20,
+                        color: AppColors.inkMuted,
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class StudyIllustration extends StatelessWidget {
@@ -408,8 +696,8 @@ class StudyIllustration extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
     child: SizedBox(
-      width: 152.828,
-      height: 116,
+      width: 132,
+      height: 100,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -434,10 +722,10 @@ class StudyIllustration extends StatelessWidget {
     double bleedX,
     double bleedY,
   ) => Positioned(
-    left: (x - w * bleedX) * 152.828,
-    top: (y - h * bleedY) * 116,
-    width: w * (1 + bleedX * 2) * 152.828,
-    height: h * (1 + bleedY * 2) * 116,
+    left: (x - w * bleedX) * 132,
+    top: (y - h * bleedY) * 100,
+    width: w * (1 + bleedX * 2) * 132,
+    height: h * (1 + bleedY * 2) * 100,
     child: SvgPicture.asset('assets/figma/$name.svg'),
   );
 }
@@ -453,14 +741,35 @@ class EmptyState extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => PaperCard(
+    padding: const EdgeInsets.all(20),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: StudyIllustration()),
-        const SizedBox(height: 20),
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const DesignIcon(
+            'imgCalendar',
+            size: 22,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 14),
         Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(message),
+        const SizedBox(height: 6),
+        Text(
+          message,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.5,
+            color: AppColors.inkSecondary,
+          ),
+        ),
         if (action != null) ...[const SizedBox(height: 16), action!],
       ],
     ),
@@ -477,16 +786,12 @@ class FormActions extends StatelessWidget {
     required this.onCancel,
   });
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Expanded(
-        child: AppButton(label: 'Batal', onPressed: onCancel, secondary: true),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: AppButton(label: label, onPressed: onSave),
-      ),
+      AppButton(label: label, onPressed: onSave),
+      TextButton(onPressed: onCancel, child: const Text('Batal')),
     ],
   );
 }
@@ -509,7 +814,7 @@ class PickerField extends StatelessWidget {
     excludeSemantics: true,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppLayout.radius),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
@@ -522,13 +827,20 @@ class PickerField extends StatelessWidget {
                   : icon == 'imgCalendar'
                   ? 'imgFieldCalendar'
                   : icon,
-              size: 22,
+              size: 20,
+              color: onTap == null
+                  ? AppColors.inkMuted
+                  : AppColors.inkSecondary,
             ),
           ),
         ),
         child: Text(
           value,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: onTap == null ? AppColors.inkMuted : AppColors.ink,
+          ),
         ),
       ),
     ),
@@ -545,7 +857,7 @@ class ResponsiveFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) =>
-        constraints.maxWidth < 340 ||
+        constraints.maxWidth < 280 ||
             MediaQuery.textScalerOf(context).scale(14) > 18
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
