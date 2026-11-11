@@ -53,3 +53,4 @@ android/key.properties
 
 # Supabase CLI temporary cache
 /supabase/.temp/
+/supabase/.branches/

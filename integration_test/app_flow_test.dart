@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:waktu_tugas/features/shared.dart';
 import 'package:waktu_tugas/main.dart' as app;
 
 void main() {
@@ -33,7 +34,7 @@ void main() {
     );
     await tester.tap(find.text('Majukan jam demo ke sesi berikutnya'));
     await tester.pumpAndSettle();
-    final session = find.byKey(const Key('session-1-0'));
+    final session = find.byType(SessionCard).first;
     await tester.ensureVisible(session);
     await tester.tap(session);
     await tester.pumpAndSettle();
@@ -53,6 +54,6 @@ void main() {
           .first,
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('90 menit tersisa'), findsOneWidget);
+    expect(find.text('90 menit tersisa'), findsOneWidget);
   });
 }

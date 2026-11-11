@@ -120,6 +120,7 @@ SELECT result.* FROM (VALUES
  ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(1020,1050)))$$,'P0003','weekly routine blocks time'),
  ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(660,690)))$$,'P0003','completed history blocks time'),
  ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(480,570),pg_temp.candidate(540,600)))$$,'P0003','candidate overlap'),
+ ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(480,541),pg_temp.candidate(540,600)))$$,'P0003','one-minute candidate overlap'),
  ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(480,600),pg_temp.candidate(690,780)))$$,'P0003','aggregate allocation exceeds remaining'),
  ($$SELECT pg_temp.confirm(jsonb_build_array(pg_temp.candidate(480,540) || jsonb_build_object('ends_at',(pg_temp.candidate(480,540)->>'ends_at')::timestamptz+interval '1 second')))$$,'P0003','fractional minute rejected'),
  ($$SELECT pg_temp.confirm(jsonb_build_array(jsonb_build_object('task_id','cccccccc-0000-0000-0000-000000000001','starts_at',now()-interval '2 minutes','ends_at',now()-interval '1 minute')))$$,'P0003','past candidate'),

@@ -87,6 +87,13 @@ Menjalankan dalam mode demo lokal:
 flutter run -d <id-perangkat>
 ```
 Menjalankan atau mem-build APK release dengan backend Supabase:
+
+APK release menggunakan ID aplikasi `com.ahmadturmudi.waktutugas`. Siapkan
+`android/key.properties` dengan `storeFile`, `storePassword`, `keyAlias`, dan
+`keyPassword`. Path relatif `storeFile` dihitung dari direktori `android/`.
+Simpan keystore dan kredensial secara privat, serta gunakan kunci yang sama untuk
+menandatangani pembaruan APK.
+
 ```powershell
 flutter run -d <id-perangkat> `
   --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co `
@@ -110,8 +117,34 @@ Catatan lengkap progres dan matriks penerimaan (`AC01–AC18`) tersedia di:
 * [`docs/PROGRESS.md`](docs/PROGRESS.md)
 * [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md)
 
-**Ringkasan status saat ini:**
-* **Selesai & Lulus Lokal:** Mesin penjadwalan Dart murni (`AC03–AC10`), seluruh layar UI dan formulir responsif, autentikasi & sesi terenkripsi (`SecureLocalStorage`), klien RPC (`PlannerApi`), cache baca luring SQLite per akun (`LocalCache`), penanganan timeout & konflik revisi (`STALE_REVISION`), serta kompilasi APK release Android (`flutter analyze` 0 masalah, 38 pengujian lokal di `test/planner`, `test/ui`, dan `test/data` lulus).
-* **Menunggu Prasyarat Lingkungan Eksternal:**
-  1. **Eksekusi runtime SQL pgTAP (`supabase test db`) & `test/backend/planner_rpc_test.dart`:** Membutuhkan Docker Engine (`dockerDesktopLinuxEngine`) yang aktif untuk menjalankan PostgreSQL lokal Supabase, atau proyek Supabase uji dengan 2 akun uji kosong.
-  2. **Eksekusi `integration_test` pada perangkat Android:** Membutuhkan perangkat Android fisik (USB debugging) atau Android Virtual Device (AVD) yang aktif pada `flutter devices`.
+## 6. Pemeriksaan rilis dalam satu perintah
+
+Dari root repositori, jalankan di PowerShell Windows.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1
+```
+
+Perintah menjalankan analisis, pemeriksaan format, dan tes Flutter. Jika Docker
+aktif, skrip menyalakan Supabase lokal dan membuat dua akun uji baru untuk uji
+RPC di database lokal. Gunakan `-Device <id>` dari `flutter devices` untuk
+menjalankan tes Android dan memasang APK yang tanda tangannya telah diperiksa.
+Build debug memakai paket `.debug`. Skrip menonaktifkan penghapusan otomatis
+oleh Flutter setelah pengujian.
+Siapkan `android/key.properties` dan keystore seperti pada bagian 4.3.
+
+Untuk kandidat daring, siapkan akses Supabase CLI lalu isi URL proyek dan
+publishable key dalam satu perintah.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Device '<id-perangkat>' -SupabaseUrl 'https://<project-ref>.supabase.co' -PublishableKey 'sb_publishable_...'
+```
+
+Skrip juga membaca `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY` dari sesi
+PowerShell. Tambahkan `-ApplyMigrations` untuk menerapkan migrasi ke proyek
+tujuan setelah pratinjau dan pemeriksaan lulus. Tanpa konfigurasi Supabase,
+skrip membangun APK demo.
+
+APK dan `hasil.md` tersimpan per eksekusi di `build/release/`. Kode keluar
+`1` menandakan pemeriksaan otomatis gagal atau masih tertunda. Lanjutkan dengan
+uji alur Supabase pada APK final sebelum membuat tag atau membagikannya.
