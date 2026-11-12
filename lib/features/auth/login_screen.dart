@@ -63,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final demo = view == _LoginView.demo,
         register = view == _LoginView.register,
         confirmation = view == _LoginView.confirmation;
@@ -91,9 +92,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   : 'Atur yang perlu dikerjakan. Temukan waktu yang benar-benar tersedia.',
             ),
             if (demo) ...[
-              const Notice(
+              Notice(
                 title: 'Demo lokal · data contoh',
-                color: AppColors.warning,
+                color: colors.warningBg,
                 icon: 'imgAlertCircle',
                 message:
                     'Perubahan hanya disimpan selama aplikasi terbuka. Akun daring belum terhubung.',
@@ -109,37 +110,37 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
+                            color: colors.primarySoft,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           alignment: Alignment.center,
-                          child: const DesignIcon(
+                          child: DesignIcon(
                             'imgUserCircle',
                             size: 22,
-                            color: AppColors.primary,
+                            color: colors.primary,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        const Expanded(
+                        const SizedBox(width: AppLayout.space12),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'Mahasiswa demo',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink,
-                                ),
+                                style: Theme.of(context).textTheme.bodyLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: colors.ink,
+                                    ),
                               ),
                               SizedBox(height: 2),
                               Text(
                                 '3 tugas · 540 menit tersisa',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primaryDark,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.onPrimarySoft,
+                                    ),
                               ),
                             ],
                           ),
@@ -150,21 +151,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: EdgeInsets.symmetric(vertical: 12),
                       child: Divider(height: 1),
                     ),
-                    const Row(
+                    Row(
                       children: [
                         DesignIcon(
                           'imgCalendar',
                           size: 15,
-                          color: AppColors.inkMuted,
+                          color: colors.inkMuted,
                         ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Senin, 9 November 2026 · 18:00 WIB',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.inkSecondary,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colors.inkSecondary),
                           ),
                         ),
                       ],
@@ -172,17 +171,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const Text(
+              Text(
                 'Kontrol memajukan jam hanya ada di Jadwal demo. Bukan waktu perangkat.',
-                style: TextStyle(fontSize: 12, color: AppColors.inkSecondary),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.inkSecondary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppLayout.space16),
               AppButton(
                 label: 'Buka demo lokal',
                 icon: 'imgArrowRight',
                 onPressed: widget.auth.enterDemo,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppLayout.space8),
               Center(
                 child: TextButton(
                   onPressed: () => changeView(_LoginView.login),
@@ -195,11 +196,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 message:
                     'Buka tautan yang dikirim ke ${email.text.trim()} sebelum masuk.',
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: Text(
                   'Belum menerima email? Periksa folder spam.',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSecondary),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: colors.inkSecondary),
                 ),
               ),
               ErrorNotice(widget.auth.error),
@@ -225,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                       },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppLayout.space8),
               Center(
                 child: TextButton(
                   onPressed: pending
@@ -236,11 +239,11 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ] else ...[
               if (!widget.auth.isCloud)
-                const Notice(
+                Notice(
                   title: 'Akun daring belum terhubung',
                   message:
                       'Gunakan demo lokal. Masuk dan daftar tersedia setelah layanan daring dikonfigurasi.',
-                  color: AppColors.warning,
+                  color: colors.warningBg,
                   icon: 'imgAlertCircle',
                 ),
               Padding(
@@ -260,21 +263,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? 'Nama wajib diisi.'
                             : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppLayout.space12),
                     ],
                     TextFormField(
                       controller: email,
                       enabled: !pending && widget.auth.isCloud,
                       keyboardType: TextInputType.emailAddress,
                       autofillHints: const [AutofillHints.email],
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Email',
                         suffixIcon: Padding(
                           padding: EdgeInsets.all(14),
                           child: DesignIcon(
                             'imgMail',
                             size: 20,
-                            color: AppColors.inkSecondary,
+                            color: colors.inkSecondary,
                           ),
                         ),
                       ),
@@ -286,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? 'Masukkan alamat email yang valid.'
                           : null,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppLayout.space16),
                     TextFormField(
                       controller: password,
                       enabled: !pending && widget.auth.isCloud,
@@ -307,10 +310,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? 'Tampilkan kata sandi'
                               : 'Sembunyikan kata sandi',
                           onPressed: () => setState(() => obscure = !obscure),
-                          icon: const DesignIcon(
+                          icon: DesignIcon(
                             'imgEyeOff',
                             size: 20,
-                            color: AppColors.inkSecondary,
+                            color: colors.inkSecondary,
                           ),
                         ),
                       ),
@@ -350,30 +353,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
               ),
               if (!register && !widget.auth.isCloud) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppLayout.space16),
                 PaperCard(
-                  color: AppColors.surfaceMuted,
+                  color: colors.surfaceMuted,
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
+                      Text(
                         'Ingin melihat dulu?',
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
+                          color: colors.ink,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
+                      const SizedBox(height: AppLayout.space4),
+                      Text(
                         'Coba contoh lokal. Tidak membuat akun daring dan tidak menyimpan data setelah ditutup.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.inkSecondary,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.inkSecondary,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppLayout.space12),
                       AppButton(
                         label: 'Coba demo lokal',
                         secondary: true,

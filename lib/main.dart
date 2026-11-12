@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'app/app.dart';
 import 'data/auth_storage.dart';
@@ -36,5 +37,33 @@ Future<void> main() async {
         : null,
   );
   await auth.restoreSession();
-  runApp(WaktuTugasApp(auth: auth, planner: planner));
+  const preferences = FlutterSecureStorage();
+  const themeKey = 'waktutugas.appearance';
+  var themeMode = ThemeMode.system;
+  try {
+    themeMode = switch (await preferences.read(key: themeKey)) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+  } on Exception {
+    debugPrint('Preferensi tema tidak dapat dibaca.');
+  }
+  var pendingThemeWrite = Future<void>.value();
+  runApp(
+    WaktuTugasApp(
+      auth: auth,
+      planner: planner,
+      initialThemeMode: themeMode,
+      onThemeModeChanged: (mode) {
+        pendingThemeWrite = pendingThemeWrite.then((_) async {
+          try {
+            await preferences.write(key: themeKey, value: mode.name);
+          } on Exception {
+            debugPrint('Preferensi tema tidak dapat disimpan.');
+          }
+        });
+      },
+    ),
+  );
 }

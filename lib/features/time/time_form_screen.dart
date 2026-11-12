@@ -70,9 +70,11 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
 
   Future<void> pickTime(TextEditingController field) async {
     final n = parseTime(field.text) ?? 0;
-    final value = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: n ~/ 60, minute: n % 60),
+    final value = await showAppDialog<TimeOfDay>(
+      context,
+      (_) => TimePickerDialog(
+        initialTime: TimeOfDay(hour: n ~/ 60, minute: n % 60),
+      ),
     );
     if (value != null && mounted) {
       setState(() => field.text = timeLabel(value.hour * 60 + value.minute));
@@ -80,11 +82,13 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
   }
 
   Future<void> pickDate({bool last = false}) async {
-    final value = await showDatePicker(
-      context: context,
-      initialDate: last ? endDate : date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100, 12, 31),
+    final value = await showAppDialog<DateTime>(
+      context,
+      (_) => DatePickerDialog(
+        initialDate: last ? endDate : date,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100, 12, 31),
+      ),
     );
     if (value != null && mounted) {
       setState(() {
@@ -176,6 +180,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final heading = widget.activity
         ? kind == ActivityKind.blocked
               ? 'Penutupan bertanggal'
@@ -247,7 +252,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                                     weekly = kind == ActivityKind.routine;
                                   }),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppLayout.space16),
                           TextFormField(
                             controller: label,
                             enabled: !fieldsLocked,
@@ -257,7 +262,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                               hintText: 'Contoh: Kuliah Sistem Operasi',
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppLayout.space12),
                         ] else ...[
                           DropdownButtonFormField<bool>(
                             isExpanded: true,
@@ -282,7 +287,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                                 ? null
                                 : (v) => setState(() => weekly = v!),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppLayout.space16),
                         ],
                         if (weekly)
                           DropdownButtonFormField<int>(
@@ -315,7 +320,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                             onTap: fieldsLocked ? null : () => pickDate(),
                           ),
                           if (dateRange) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppLayout.space16),
                             PickerField(
                               label: 'Tanggal akhir *',
                               value: DateFormat(
@@ -329,7 +334,7 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                             ),
                           ],
                         ],
-                        const SizedBox(height: 16),
+                        const SizedBox(height: AppLayout.space16),
                         SectionHeader(
                           title: widget.activity
                               ? 'Jam kegiatan'
@@ -346,10 +351,10 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                               labelText: 'Mulai · WIB *',
                               suffixIcon: IconButton(
                                 tooltip: 'Pilih jam mulai',
-                                icon: const DesignIcon(
+                                icon: DesignIcon(
                                   'imgClock',
                                   size: 20,
-                                  color: AppColors.inkSecondary,
+                                  color: colors.inkSecondary,
                                 ),
                                 onPressed: fieldsLocked
                                     ? null
@@ -369,10 +374,10 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                               labelText: 'Selesai · WIB *',
                               suffixIcon: IconButton(
                                 tooltip: 'Pilih jam selesai',
-                                icon: const DesignIcon(
+                                icon: DesignIcon(
                                   'imgClock',
                                   size: 20,
-                                  color: AppColors.inkSecondary,
+                                  color: colors.inkSecondary,
                                 ),
                                 onPressed: fieldsLocked
                                     ? null
@@ -391,8 +396,8 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        const Row(
+                        const SizedBox(height: AppLayout.space12),
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Padding(
@@ -400,18 +405,15 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                               child: DesignIcon(
                                 'imgInfo',
                                 size: 15,
-                                color: AppColors.inkMuted,
+                                color: colors.inkMuted,
                               ),
                             ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Batas waktu yang jelas: jika melewati tengah malam, buat dua rentang pada dua hari. 24:00 hanya boleh sebagai waktu selesai.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.4,
-                                  color: AppColors.inkSecondary,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: colors.inkSecondary),
                               ),
                             ),
                           ],
@@ -434,16 +436,17 @@ class _TimeFormScreenState extends State<TimeFormScreen> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
                         'Disimpan sebagai satu penutupan per tanggal. ${savedDays > 0 ? '$savedDays tanggal sudah tersimpan; melanjutkan tidak mengulang tanggal tersebut.' : 'Jika sebagian gagal, tanggal yang berhasil tetap tersimpan.'}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.inkSecondary,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.inkSecondary,
                         ),
                       ),
                     ),
                   ErrorNotice(localError ?? p.error),
-                  const Text(
+                  Text(
                     '* Wajib diisi · simpan tidak otomatis mengganti jadwal terkonfirmasi.',
-                    style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.inkMuted),
                   ),
                 ],
               ),

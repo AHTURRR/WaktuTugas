@@ -14,7 +14,21 @@ import '../features/auth/account_screen.dart';
 import '../state/auth_controller.dart';
 import '../state/planner_controller.dart';
 
-GoRouter createRouter(AuthController auth, PlannerController planner) {
+const _destinations = [
+  NavigationDestination(icon: DesignIcon('imgHome'), label: 'Ringkasan'),
+  NavigationDestination(
+    icon: DesignIcon('imgNavigationCheckSquare'),
+    label: 'Tugas',
+  ),
+  NavigationDestination(icon: DesignIcon('imgClock1'), label: 'Waktu'),
+  NavigationDestination(icon: DesignIcon('imgCalendar'), label: 'Jadwal'),
+];
+
+GoRouter createRouter(
+  AuthController auth,
+  PlannerController planner,
+  ValueNotifier<ThemeMode> themeMode,
+) {
   final root = GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
@@ -37,167 +51,239 @@ GoRouter createRouter(AuthController auth, PlannerController planner) {
         builder: (c, s) => LoginScreen(auth: auth),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => Scaffold(
-          appBar: AppBar(
-            title: const Row(
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColors.forest,
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
+        builder: (context, state, shell) {
+          final colors = AppColors.of(context);
+          final showTaskList = shell.currentIndex == 1;
+          final wide = MediaQuery.sizeOf(context).width >= 900;
+          return Scaffold(
+            appBar: AppBar(
+              title: Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.panel,
+                      borderRadius: BorderRadius.circular(
+                        AppLayout.controlRadius,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppLayout.space8),
+                      child: DesignIcon(
+                        'imgClock1',
+                        size: 20,
+                        color: colors.accent,
+                      ),
+                    ),
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: DesignIcon(
-                      'imgClock1',
-                      size: 20,
-                      color: AppColors.lime,
+                  const SizedBox(width: AppLayout.space8),
+                  const Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text('WaktuTugas'),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            AccountScreen(auth: auth, themeMode: themeMode),
+                      ),
+                    ),
+                    tooltip: 'Akun Anda',
+                    icon: DesignIcon(
+                      'imgUserCircle',
+                      size: 22,
+                      color: colors.inkSecondary,
                     ),
                   ),
                 ),
-                SizedBox(width: 10),
-                Text('WaktuTugas'),
               ],
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => AccountScreen(auth: auth),
+            body: FocusTraversalGroup(
+              policy: OrderedTraversalPolicy(),
+              child: Row(
+                children: [
+                  if (wide)
+                    FocusTraversalOrder(
+                      order: const NumericFocusOrder(1),
+                      child: SafeArea(
+                        top: false,
+                        right: false,
+                        minimum: const EdgeInsets.fromLTRB(12, 4, 0, 12),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            AppLayout.navigationRadius,
+                          ),
+                          child: NavigationRail(
+                            extended: true,
+                            minExtendedWidth: 168,
+                            scrollable: true,
+                            selectedIndex: shell.currentIndex,
+                            onDestinationSelected: (i) => shell.goBranch(i),
+                            destinations: [
+                              for (final destination in _destinations)
+                                NavigationRailDestination(
+                                  icon: destination.icon,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppLayout.space4,
+                                  ),
+                                  label: ListenableBuilder(
+                                    listenable: FocusManager.instance,
+                                    builder: (context, _) {
+                                      final focused =
+                                          Focus.maybeOf(context)?.hasFocus ??
+                                          false;
+                                      return Text(
+                                        destination.label,
+                                        style: focused
+                                            ? TextStyle(
+                                                decoration:
+                                                    TextDecoration.underline,
+                                                decorationColor:
+                                                    colors.focusOnPanel,
+                                                decorationThickness: 2,
+                                              )
+                                            : null,
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  tooltip: 'Akun Anda',
-                  icon: const DesignIcon(
-                    'imgUserCircle',
-                    size: 22,
-                    color: AppColors.inkSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              ListenableBuilder(
-                listenable: planner,
-                builder: (c, _) => planner.isOfflineSnapshot
-                    ? Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  Expanded(
+                    key: const ValueKey('navigation-content'),
+                    child: FocusTraversalOrder(
+                      order: const NumericFocusOrder(2),
+                      child: FocusTraversalGroup(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Notice(
-                              title: 'Luring · hanya baca',
-                              message:
-                                  'Cache akun yang sama. ${planner.fetchedAt == null ? '' : 'Pembaruan terakhir: ${dateTimeLabel(planner.fetchedAt!)}'}',
-                              color: AppColors.warning,
-                              icon: 'imgAlertCircle',
-                            ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: planner.isPending
-                                    ? null
-                                    : () => planner.fetchSnapshot(
-                                        userId: auth.userId,
+                            ListenableBuilder(
+                              listenable: planner,
+                              builder: (c, _) => planner.isOfflineSnapshot
+                                  ? Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        20,
+                                        12,
+                                        20,
+                                        0,
                                       ),
-                                child: const Text('Coba sambungkan lagi'),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Notice(
+                                            title: 'Luring · hanya baca',
+                                            message:
+                                                'Cache akun yang sama. ${planner.fetchedAt == null ? '' : 'Pembaruan terakhir: ${dateTimeLabel(planner.fetchedAt!)}'}',
+                                            color: colors.warningBg,
+                                            live: true,
+                                          ),
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: TextButton(
+                                              onPressed: planner.isPending
+                                                  ? null
+                                                  : () => planner.fetchSnapshot(
+                                                      userId: auth.userId,
+                                                    ),
+                                              child: const Text(
+                                                'Coba sambungkan lagi',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : planner.isPending && !showTaskList
+                                  ? LinearProgressIndicator(
+                                      color: colors.primary,
+                                      backgroundColor: colors.primarySoft,
+                                      semanticsLabel: 'Sedang memuat…',
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            Expanded(
+                              child: ListenableBuilder(
+                                listenable: planner,
+                                builder: (context, _) {
+                                  final loading =
+                                      planner.isApiBacked &&
+                                      planner.isPending &&
+                                      !showTaskList;
+                                  return Stack(
+                                    children: [
+                                      Offstage(offstage: loading, child: shell),
+                                      if (loading)
+                                        const PageContent(
+                                          children: [
+                                            PageHeading(
+                                              'Menyiapkan ruang fokus',
+                                              'Memuat tugas, waktu, dan jadwal untuk akun Anda.',
+                                            ),
+                                            SizedBox(height: 16),
+                                            Notice(
+                                              title: 'Sedang memuat…',
+                                              message:
+                                                  'Tunggu hingga data siap. Jadwal belum dihitung atau diubah.',
+                                            ),
+                                          ],
+                                        ),
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                           ],
                         ),
-                      )
-                    : planner.isPending
-                    ? const LinearProgressIndicator(
-                        color: AppColors.primary,
-                        backgroundColor: AppColors.primarySoft,
-                        semanticsLabel: 'Sedang memuat…',
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: planner,
-                  builder: (context, _) {
-                    final loading = planner.isApiBacked && planner.isPending;
-                    return Stack(
-                      children: [
-                        Offstage(offstage: loading, child: shell),
-                        if (loading)
-                          const PageContent(
-                            children: [
-                              PageHeading(
-                                'Menyiapkan ruang fokus',
-                                'Memuat tugas, waktu, dan jadwal untuk akun Anda.',
-                              ),
-                              SizedBox(height: 16),
-                              Notice(
-                                title: 'Sedang memuat…',
-                                message:
-                                    'Tunggu hingga data siap. Jadwal belum dihitung atau diubah.',
-                              ),
-                            ],
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          bottomNavigationBar: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: NavigationBar(
-                animationDuration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : const Duration(milliseconds: 200),
-                selectedIndex: shell.currentIndex,
-                onDestinationSelected: (i) => shell.goBranch(i),
-                destinations: const [
-                  NavigationDestination(
-                    icon: DesignIcon('imgHome', color: AppColors.onForest),
-                    selectedIcon: DesignIcon(
-                      'imgHome',
-                      color: AppColors.forest,
+                      ),
                     ),
-                    label: 'Ringkasan',
-                  ),
-                  NavigationDestination(
-                    icon: DesignIcon(
-                      'imgNavigationCheckSquare',
-                      color: AppColors.onForest,
-                    ),
-                    selectedIcon: DesignIcon(
-                      'imgNavigationCheckSquare',
-                      color: AppColors.forest,
-                    ),
-                    label: 'Tugas',
-                  ),
-                  NavigationDestination(
-                    icon: DesignIcon('imgClock1', color: AppColors.onForest),
-                    selectedIcon: DesignIcon(
-                      'imgClock1',
-                      color: AppColors.forest,
-                    ),
-                    label: 'Waktu',
-                  ),
-                  NavigationDestination(
-                    icon: DesignIcon('imgCalendar', color: AppColors.onForest),
-                    selectedIcon: DesignIcon(
-                      'imgCalendar',
-                      color: AppColors.forest,
-                    ),
-                    label: 'Jadwal',
                   ),
                 ],
               ),
             ),
-          ),
-        ),
+            bottomNavigationBar: wide
+                ? null
+                : SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(
+                      AppLayout.space12,
+                      AppLayout.space4,
+                      AppLayout.space12,
+                      AppLayout.space8,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        AppLayout.navigationRadius,
+                      ),
+                      child: NavigationBar(
+                        height:
+                            AppLayout.navigationHeight +
+                            (MediaQuery.textScalerOf(context).scale(16) - 16)
+                                .clamp(0, 32),
+                        animationDuration: AppMotion.durationOf(context),
+                        selectedIndex: shell.currentIndex,
+                        onDestinationSelected: (i) => shell.goBranch(i),
+                        destinations: [
+                          for (final destination in _destinations)
+                            KeyboardFocusOutline(
+                              color: colors.focusOnPanel,
+                              child: destination,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+          );
+        },
         branches: [
           StatefulShellBranch(
             routes: [

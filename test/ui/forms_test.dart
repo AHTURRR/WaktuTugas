@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:waktu_tugas/app/app.dart';
+import 'package:waktu_tugas/features/shared.dart';
 import 'package:waktu_tugas/planner/models.dart';
 import 'package:waktu_tugas/state/auth_controller.dart';
 import 'package:waktu_tugas/state/planner_controller.dart';
@@ -14,10 +15,11 @@ Future<void> boot(WidgetTester t, PlannerController p) async {
 }
 
 Future<void> tab(WidgetTester t, String label) async {
+  final navigation = find.byWidgetPredicate(
+    (widget) => widget is NavigationBar || widget is NavigationRail,
+  );
   await t.tap(
-    find
-        .descendant(of: find.byType(NavigationBar), matching: find.text(label))
-        .first,
+    find.descendant(of: navigation, matching: find.text(label)).first,
   );
   await t.pumpAndSettle();
 }
@@ -100,12 +102,66 @@ void main() {
     expect(find.text('Masukkan menit bulat positif.'), findsOneWidget);
     expect(p.snapshot.revision, 0);
     expect(find.text('-1'), findsOneWidget);
+    expect(
+      t
+          .widget<EditableText>(find.byType(EditableText).first)
+          .focusNode
+          .hasFocus,
+      isTrue,
+    );
     await t.enterText(find.byKey(const Key('title')), 'Tugas baru');
     await t.enterText(find.byKey(const Key('remaining')), '30');
+    await t.pumpAndSettle();
+    expect(find.text('Nama wajib diisi.'), findsNothing);
+    expect(find.text('Masukkan menit bulat positif.'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is DesignIcon && w.name == 'imgCheckCircle',
+      ),
+      findsNWidgets(2),
+    );
     await t.ensureVisible(find.text('Simpan tugas'));
     await t.tap(find.text('Simpan tugas'));
     await t.pumpAndSettle();
     expect(p.snapshot.tasks.last.title, 'Tugas baru');
+  });
+  testWidgets('edit form preserves values and accepts zero remaining minutes', (
+    t,
+  ) async {
+    t.view.physicalSize = const Size(375, 812);
+    t.view.devicePixelRatio = 1;
+    addTearDown(() {
+      t.view.resetPhysicalSize();
+      t.view.resetDevicePixelRatio();
+    });
+    final p = PlannerController();
+    final original = p.snapshot.tasks.first;
+    await boot(t, p);
+    await tab(t, 'Tugas');
+    await t.tap(find.byTooltip('Ubah ${original.title}'));
+    await t.pumpAndSettle();
+
+    expect(find.text('Ubah tugas'), findsOneWidget);
+    expect(find.text(original.title), findsOneWidget);
+    expect(find.text('${original.remainingMinutes}'), findsOneWidget);
+    final pickers = find.byType(PickerField);
+    expect(pickers, findsNWidgets(2));
+    for (final control in [
+      pickers.first,
+      pickers.last,
+      find.byType(AppButton),
+      find.widgetWithText(TextButton, 'Batal'),
+    ]) {
+      expect(t.getSize(control).shortestSide, greaterThanOrEqualTo(48));
+    }
+    await t.enterText(find.byKey(const Key('remaining')), '0');
+    await t.tap(find.text('Simpan tugas'));
+    await t.pumpAndSettle();
+    final saved = p.taskById(original.id)!;
+    expect(saved.remainingMinutes, 0);
+    expect(saved.deadlineAt, original.deadlineAt);
+    expect(saved.title, original.title);
+    expect(saved.course, original.course);
   });
   testWidgets('reversed interval rejected and weekly/date mutually exclusive', (
     t,

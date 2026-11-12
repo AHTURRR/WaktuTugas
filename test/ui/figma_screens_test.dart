@@ -52,6 +52,9 @@ void main() {
     final font = FontLoader('Plus Jakarta Sans')
       ..addFont(rootBundle.load('assets/fonts/PlusJakartaSans.ttf'));
     await font.load();
+    final mono = FontLoader('IBM Plex Mono')
+      ..addFont(rootBundle.load('assets/fonts/IBMPlexMono-Medium.ttf'));
+    await mono.load();
     final icons = FontLoader('MaterialIcons')
       ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
     await icons.load();
@@ -77,16 +80,20 @@ void main() {
     });
   }
 
-  for (final width in [360.0, 412.0]) {
+  for (final width in [375.0, 768.0, 1280.0]) {
     for (final scale in [1.0, 1.8]) {
       testWidgets('main flows at $width dp and text $scale', (t) async {
         t.view.physicalSize = Size(width, 915);
         t.view.devicePixelRatio = 1;
         t.platformDispatcher.textScaleFactorTestValue = scale;
+        t.platformDispatcher.platformBrightnessTestValue = scale == 1.0
+            ? Brightness.light
+            : Brightness.dark;
         addTearDown(() {
           t.view.resetPhysicalSize();
           t.view.resetDevicePixelRatio();
           t.platformDispatcher.clearTextScaleFactorTestValue();
+          t.platformDispatcher.clearPlatformBrightnessTestValue();
         });
         final p = PlannerController();
         await t.pumpWidget(
@@ -104,7 +111,9 @@ void main() {
           await t.tap(
             find
                 .descendant(
-                  of: find.byType(NavigationBar),
+                  of: find.byWidgetPredicate(
+                    (w) => w is NavigationBar || w is NavigationRail,
+                  ),
                   matching: find.text(label),
                 )
                 .first,
@@ -290,7 +299,7 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  for (final width in [360.0, 412.0]) {
+  for (final width in [375.0, 768.0, 1280.0]) {
     for (final scale in [1.0, 1.8]) {
       testWidgets('auth, account and time forms at $width and $scale', (
         t,
@@ -309,7 +318,9 @@ void main() {
               child: MaterialApp(
                 debugShowCheckedModeBanner: false,
                 key: UniqueKey(),
-                theme: buildTheme(),
+                theme: buildTheme(
+                  brightness: scale == 1.0 ? Brightness.light : Brightness.dark,
+                ),
                 home: screen,
               ),
             ),
@@ -328,7 +339,12 @@ void main() {
         await t.pumpAndSettle();
         await capture(t, 'register-${width.toInt()}-$scale');
         await show(LoginScreen(auth: AuthController()), 'local-demo-412');
-        await show(AccountScreen(auth: AuthController()), 'account-412');
+        final themeMode = ValueNotifier(ThemeMode.system);
+        addTearDown(themeMode.dispose);
+        await show(
+          AccountScreen(auth: AuthController(), themeMode: themeMode),
+          'account-412',
+        );
         await t.runAsync(p.generatePreview);
         await show(ReasonsScreen(planner: p), 'reasons-412');
         await show(TimeFormScreen(planner: p), 'extra-range-412');
