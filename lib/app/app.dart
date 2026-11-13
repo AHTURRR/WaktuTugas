@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import '../data/whatsapp_api.dart';
 import '../state/auth_controller.dart';
 import '../state/planner_controller.dart';
 import 'router.dart';
@@ -9,12 +10,14 @@ import 'theme.dart';
 class WaktuTugasApp extends StatefulWidget {
   final AuthController auth;
   final PlannerController planner;
+  final WhatsAppApi? whatsapp;
   final ThemeMode initialThemeMode;
   final ValueChanged<ThemeMode>? onThemeModeChanged;
   const WaktuTugasApp({
     super.key,
     required this.auth,
     required this.planner,
+    this.whatsapp,
     this.initialThemeMode = ThemeMode.system,
     this.onThemeModeChanged,
   });
@@ -33,7 +36,12 @@ class _WaktuTugasAppState extends State<WaktuTugasApp> {
     widget.auth.addListener(_sessionChanged);
     themeMode = ValueNotifier(widget.initialThemeMode)
       ..addListener(_themeChanged);
-    router = createRouter(widget.auth, widget.planner, themeMode);
+    router = createRouter(
+      widget.auth,
+      widget.planner,
+      themeMode,
+      whatsapp: widget.whatsapp,
+    );
     if (widget.auth.signedIn &&
         widget.auth.isCloud &&
         widget.planner.api != null) {

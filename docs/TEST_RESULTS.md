@@ -110,3 +110,18 @@ akun B. Hash APK terpasang diverifikasi ulang dan cocok dengan artefak di atas.
 
 Untuk temuan baru, tambahkan versi atau hash APK, perangkat, langkah
 reproduksi, hasil aktual dan yang diharapkan, serta bukti uji ulang saat ditutup.
+
+## Pengingat WhatsApp — 13 November 2026 (WIB)
+
+| Pemeriksaan | Hasil aktual |
+| --- | --- |
+| Migrasi Supabase lokal | `supabase migration up` menerapkan 004. Ledger lokal mencatat 001–004. |
+| PostgreSQL dan RLS | `supabase test db` lulus 316 pemeriksaan, termasuk 38 pemeriksaan WhatsApp. Cakupan meliputi kode salah, kedaluwarsa, habis percobaan, sekali pakai, kuota akun/nomor, isolasi akun, pengingat nonaktif, tugas selesai/dihapus, perubahan tenggat, dan klaim ganda. |
+| OpenWA mock dan Supabase Auth lokal | 3 tes Node lulus. Dua akun lokal menguji normalisasi, pengiriman OTP mock, isolasi, verifikasi, opt-in/opt-out, dan penggantian nomor. Dua worker paralel menghasilkan satu klaim. Respons yang hilang diikuti replay dengan kunci dan payload yang sama. `accepted` dicatat setelah mock menjawab 201. |
+| Flutter | 69 tes regresi UI/planner/data lulus, ditambah 1 widget test WhatsApp pada lebar 375 dp dalam tema gelap. Tes baru mencakup menu akun daring, kesalahan OTP, verifikasi, opt-in/opt-out, dan reset saat nomor diganti. |
+| Edge Runtime lokal | Kedua fungsi berjalan lewat `supabase functions serve` dan lulus `deno check`. POST tanpa autentikasi mengembalikan 401 untuk masing-masing fungsi. Preflight pengaturan mengembalikan 204. Dengan token akun lokal, pembacaan status mengembalikan 200 dan nomor tidak valid ditolak dengan 400. |
+| Definisi Cron | SQL berhasil membuat job aktif dengan jadwal `* * * * *` di PostgreSQL lokal dalam transaksi uji yang di-rollback. Pengiriman dari job terjadwal belum diuji di proyek tujuan. |
+| Proyek Supabase tujuan | RPC `get_planner_snapshot` dikenali dan menolak probe tanpa sesi dengan kode `42501`. Bukti sebelumnya untuk ledger 001–003 ada di R06. Status ledger terkini belum terverifikasi karena CLI lokal belum tertaut. Migrasi 004, Edge Functions, dan Cron belum diterapkan ke tujuan. |
+| Penerimaan pesan nyata | Belum diuji. Origin HTTPS OpenWA, sesi pengirim siap, key operator, dan nomor penerima uji belum tersedia dalam lingkungan ini. Mock memverifikasi penerimaan oleh gateway, bukan pengantaran WhatsApp. Belum ada APK baru yang diuji untuk fitur ini. |
+
+Langkah aktivasi dan uji penerimaan ada di [panduan pengingat WhatsApp](WHATSAPP_REMINDERS.md).

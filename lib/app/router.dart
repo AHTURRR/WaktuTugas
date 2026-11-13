@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../data/whatsapp_api.dart';
 import 'theme.dart';
 import '../features/auth/login_screen.dart';
 import '../features/home/home_screen.dart';
@@ -27,8 +28,9 @@ const _destinations = [
 GoRouter createRouter(
   AuthController auth,
   PlannerController planner,
-  ValueNotifier<ThemeMode> themeMode,
-) {
+  ValueNotifier<ThemeMode> themeMode, {
+  WhatsAppApi? whatsapp,
+}) {
   final root = GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
@@ -91,8 +93,11 @@ GoRouter createRouter(
                   child: IconButton(
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) =>
-                            AccountScreen(auth: auth, themeMode: themeMode),
+                        builder: (_) => AccountScreen(
+                          auth: auth,
+                          themeMode: themeMode,
+                          whatsapp: whatsapp,
+                        ),
                       ),
                     ),
                     tooltip: 'Akun Anda',

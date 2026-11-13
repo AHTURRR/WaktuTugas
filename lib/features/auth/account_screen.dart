@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../app/theme.dart';
+import '../../data/whatsapp_api.dart';
 import '../../state/auth_controller.dart';
 import '../shared.dart';
+import 'whatsapp_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   final AuthController auth;
   final ValueNotifier<ThemeMode> themeMode;
-  const AccountScreen({super.key, required this.auth, required this.themeMode});
+  final WhatsAppApi? whatsapp;
+  const AccountScreen({
+    super.key,
+    required this.auth,
+    required this.themeMode,
+    this.whatsapp,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +71,19 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (auth.signedIn && auth.isCloud && whatsapp != null) ...[
+              AppButton(
+                label: 'Pengingat WhatsApp',
+                icon: 'imgClock',
+                secondary: true,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => WhatsAppScreen(auth: auth, api: whatsapp!),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppLayout.space16),
+            ],
             const SectionHeader(
               title: 'Akun & penyimpanan',
               subtitle: 'Kejelasan tentang data yang Anda gunakan.',

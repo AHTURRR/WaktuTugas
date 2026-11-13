@@ -148,3 +148,7 @@ skrip membangun APK demo.
 APK dan `hasil.md` tersimpan per eksekusi di `build/release/`. Kode keluar
 `1` menandakan pemeriksaan otomatis gagal atau masih tertunda. Lanjutkan dengan
 uji alur Supabase pada APK final sebelum membuat tag atau membagikannya.
+
+## Pengingat WhatsApp
+
+Untuk menyiapkan nomor pengirim OpenWA, secrets Supabase, migrasi 004, Cron, dan tes mock, ikuti [panduan pengingat WhatsApp](docs/WHATSAPP_REMINDERS.md).

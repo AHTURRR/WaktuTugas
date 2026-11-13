@@ -7,6 +7,7 @@ import 'data/auth_storage.dart';
 import 'data/cache.dart';
 import 'data/planner_api.dart';
 import 'data/supabase_client.dart';
+import 'data/whatsapp_api.dart';
 import 'state/auth_controller.dart';
 import 'state/planner_controller.dart';
 
@@ -54,6 +55,9 @@ Future<void> main() async {
     WaktuTugasApp(
       auth: auth,
       planner: planner,
+      whatsapp: SupabaseConfig.isConfigured
+          ? WhatsAppApi(SupabaseConfig.client)
+          : null,
       initialThemeMode: themeMode,
       onThemeModeChanged: (mode) {
         pendingThemeWrite = pendingThemeWrite.then((_) async {
