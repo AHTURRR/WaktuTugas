@@ -121,7 +121,36 @@ reproduksi, hasil aktual dan yang diharapkan, serta bukti uji ulang saat ditutup
 | Flutter | 69 tes regresi UI/planner/data lulus, ditambah 1 widget test WhatsApp pada lebar 375 dp dalam tema gelap. Tes baru mencakup menu akun daring, kesalahan OTP, verifikasi, opt-in/opt-out, dan reset saat nomor diganti. |
 | Edge Runtime lokal | Kedua fungsi berjalan lewat `supabase functions serve` dan lulus `deno check`. POST tanpa autentikasi mengembalikan 401 untuk masing-masing fungsi. Preflight pengaturan mengembalikan 204. Dengan token akun lokal, pembacaan status mengembalikan 200 dan nomor tidak valid ditolak dengan 400. |
 | Definisi Cron | SQL berhasil membuat job aktif dengan jadwal `* * * * *` di PostgreSQL lokal dalam transaksi uji yang di-rollback. Pengiriman dari job terjadwal belum diuji di proyek tujuan. |
-| Proyek Supabase tujuan | RPC `get_planner_snapshot` dikenali dan menolak probe tanpa sesi dengan kode `42501`. Bukti sebelumnya untuk ledger 001–003 ada di R06. Status ledger terkini belum terverifikasi karena CLI lokal belum tertaut. Migrasi 004, Edge Functions, dan Cron belum diterapkan ke tujuan. |
-| Penerimaan pesan nyata | Belum diuji. Origin HTTPS OpenWA, sesi pengirim siap, key operator, dan nomor penerima uji belum tersedia dalam lingkungan ini. Mock memverifikasi penerimaan oleh gateway, bukan pengantaran WhatsApp. Belum ada APK baru yang diuji untuk fitur ini. |
+| Proyek Supabase tujuan | CLI tertaut ke `lgjzoipinceatiitptyc`; `supabase migration list --remote` mencatat 001–004. Dry-run hanya mengusulkan 004, lalu `supabase db push --remote --yes` berhasil menerapkannya. |
+| Edge Functions tujuan | Perintah deploy `whatsapp-settings` dan `send-task-reminders` dengan `--no-verify-jwt --yes` berhasil. Pemeriksaan `supabase functions list` hanya melaporkan `send-task-reminders`; keberadaan `whatsapp-settings` perlu dikonfirmasi ulang di dashboard sebelum uji OTP. |
+| Secret Edge Functions tujuan | Secret khusus `OPENWA_URL`, `OPENWA_SESSION_ID`, `OPENWA_API_KEY`, `WHATSAPP_CODE_SECRET`, dan `WHATSAPP_CRON_SECRET` belum tersedia. Nilai tidak dicetak atau disimpan dalam laporan; masukkan melalui Supabase Dashboard → Edge Functions → Secrets. |
+| OpenWA dan Cron tujuan | Dashboard lokal `http://localhost:2785` tidak dapat dijangkau Supabase. URL HTTPS publik, UUID sesi `ready`, dan key operator terbatas sesi belum tersedia. Karena itu Vault dan Cron `* * * * *` belum diaktifkan. |
+| Pengiriman manual OpenWA | Lulus berdasarkan konfirmasi pengguna bahwa pesan uji dari Message Tester sampai di WhatsApp penerima. |
+| Pengingat otomatis WaktuTugas | Pengiriman OTP dan pengingat terjadwal dari APK ke WhatsApp belum diuji di proyek tujuan. Uji ini membutuhkan URL HTTPS OpenWA yang dapat dijangkau Supabase, key operator, migrasi 004, Edge Functions, dan Cron. |
+
+### Verifikasi lanjutan — 13 November 2026 (WIB)
+
+| Pemeriksaan | Hasil aktual |
+| --- | --- |
+| Tes SQL setelah aktivasi migrasi | `supabase test db` lulus 316/316 pemeriksaan pada eksekusi ulang. Satu eksekusi awal melaporkan kegagalan fluktuatif pada assertion delivery `accepted`; reproduksi terisolasi dan eksekusi ulang lulus tanpa perubahan skema. |
+| Tes Edge Function lokal | 3 tes Node lulus, termasuk OTP, isolasi dua akun, worker paralel, retry dengan Idempotency-Key yang sama, dan respons OpenWA mock. |
+| Tes Flutter terkait | `flutter test test/ui/whatsapp_screen_test.dart` lulus 1/1. |
+| APK dan penerimaan nyata | Belum dapat dijalankan. Tidak ada URL HTTPS OpenWA, secret operator, atau Cron tujuan yang tersedia; pengiriman manual sebelumnya tidak membuktikan pengiriman dari Edge Function. |
 
 Langkah aktivasi dan uji penerimaan ada di [panduan pengingat WhatsApp](WHATSAPP_REMINDERS.md).
+
+### Pemeriksaan gateway dan produksi
+
+- Migrasi 004 tercatat di produksi. Pemeriksaan ulang daftar fungsi mengonfirmasi `whatsapp-settings` dan `send-task-reminders` sama-sama aktif.
+- Sesi OpenWA `waktutugas-admin` berstatus `ready`. Lewat URL HTTPS ngrok, endpoint kirim menolak permintaan tanpa key dengan HTTP 401 dan menolak payload kosong dengan key operator dengan HTTP 400. Dashboard dan daftar sesi tidak diteruskan (HTTP 404 setelah melewati halaman peringatan ngrok). Pemeriksaan ini tidak mengirim pesan.
+- Lima secret khusus Edge Functions belum terpasang pada saat diperiksa. Kedua secret Vault belum ada dan ekstensi `pg_cron` belum aktif. Gateway masih bergantung pada komputer Windows, Docker, dan tunnel ngrok yang tetap aktif.
+- APK rilis `1.0.0+1` dibangun untuk proyek produksi, lulus verifikasi tanda tangan APK v2, dan berhasil dipasang serta dibuka di `WaktuTugasRelease` (`emulator-5554`, Android 15/API 35, x86_64). SHA-256 file dan APK terpasang cocok: `3aadafd9ea9d935c953b600fc43dbf5805be7e2932e2faf79864e6fb879ff620`. Uji penerimaan OTP dan pengingat terjadwal belum dilakukan.
+
+### Aktivasi produksi — 14 November 2026 (WIB)
+
+- Lima secret Edge Function disimpan lewat Dashboard dan diverifikasi berdasarkan nama. Dua secret Vault disimpan lewat integrasi Vault; nilainya tidak dicatat.
+- Job `send-task-reminders` diaktifkan setiap menit (`* * * * *`). Dua eksekusi terjadwal pertama berstatus `succeeded` dan mendapat HTTP 200 dari Edge Function tanpa timeout. Saat pemeriksaan awal belum ada akun terverifikasi yang mengaktifkan pengingat; respons tersebut membuktikan panggilan Cron, bukan penerimaan pesan.
+- APK rilis membuka **Akun Anda → Pengingat WhatsApp** di `WaktuTugasRelease`, tetapi pembacaan status habis waktu. Windows dapat me-resolve domain Supabase, sedangkan Android melaporkan `unknown host` sebelum dan sesudah cold boot dengan DNS eksplisit. Penerimaan OTP dan pengingat terjadwal belum diuji. Ulangi di perangkat Android dengan koneksi ke Supabase dan nomor penerima yang menyetujui uji.
+- Pemeriksaan lanjutan pada emulator yang sama mengonfirmasi DNS Supabase sudah berfungsi dan formulir nomor berhasil dimuat. Satu permintaan OTP untuk nomor uji yang diberikan pemilik berhasil membuka langkah **Verifikasi nomor** tanpa galat pengiriman. Status produksi menunjukkan satu verifikasi tertunda. Penerimaan di WhatsApp menunggu konfirmasi pengguna.
+- Uji OTP produksi lulus. Pemilik menerima kode melalui WhatsApp, dan pengiriman kode dari APK di emulator menampilkan status **Terverifikasi**. Supabase mengonfirmasi verifikasi tersimpan dan tantangan OTP sudah ditutup.
+- Uji pengingat terjadwal produksi lulus pada 14 November 2026. Pengingat aktif pada akun uji dan aplikasi di emulator dihentikan sebelum Cron berjalan. Tugas uji sementara dibuat langsung di Supabase dengan tenggat 15 November pukul 09.41 WIB. Cron pukul 09.41 WIB memicu percobaan pertama dan Supabase mencatat `accepted` pukul 09.41.07 WIB. OpenWA mencatat satu pesan keluar berstatus `read`. Setelah putaran Cron pukul 09.42 WIB, masih ada satu catatan pengiriman dan satu pesan keluar. Tugas uji dihapus setelah pemeriksaan, dan pengingat akun tetap aktif.
