@@ -37,19 +37,13 @@ void main() {
   setUpAll(tzdata.initializeTimeZones);
   test('demo_shortfall has exact deterministic sessions and T03=120', () {
     final p = buildPreview(demoSnapshot(), demoNow);
-    expect(p.sessions.map((s) => s.taskId), [
-      'T01',
-      'T01',
-      'T01',
-      'T02',
-      'T03',
-    ]);
-    expect(p.sessions.map((s) => s.endsAt.difference(s.startsAt).inMinutes), [
-      60,
-      60,
-      120,
-      120,
-      60,
+    // PRD §4.4: the campus activity splits Monday's window at 20.00 WIB.
+    expect(p.sessions.map((s) => (s.taskId, s.startsAt, s.endsAt)), [
+      ('T01', DateTime.utc(2026, 11, 9, 12), DateTime.utc(2026, 11, 9, 13)),
+      ('T01', DateTime.utc(2026, 11, 9, 14), DateTime.utc(2026, 11, 9, 15)),
+      ('T01', DateTime.utc(2026, 11, 10, 12), DateTime.utc(2026, 11, 10, 14)),
+      ('T02', DateTime.utc(2026, 11, 11, 12), DateTime.utc(2026, 11, 11, 14)),
+      ('T03', DateTime.utc(2026, 11, 12, 12), DateTime.utc(2026, 11, 12, 13)),
     ]);
     expect(p.unallocated.single.toJson(), {
       'task_id': 'T03',
@@ -72,7 +66,14 @@ void main() {
         ),
       ],
     );
-    expect(buildPreview(s, demoNow).unallocated, isEmpty);
+    final p = buildPreview(s, demoNow);
+    expect(p.unallocated, isEmpty);
+    expect(
+      p.sessions
+          .where((session) => session.taskId == 'T03')
+          .map((session) => (session.startsAt, session.endsAt)),
+      [(DateTime.utc(2026, 11, 12, 12), DateTime.utc(2026, 11, 12, 15))],
+    );
   });
   test(
     'deadline_mid_slot and adjacent sessions respect half-open intervals',
@@ -80,8 +81,8 @@ void main() {
       final end = DateTime.utc(2026, 11, 9, 13, 30);
       final s = sample(
         tasks: [
-          task('a', end, minutes: 90),
           task('b', end.add(const Duration(hours: 2))),
+          task('a', end, minutes: 90),
         ],
         windows: [
           TimeWindow(
@@ -94,11 +95,15 @@ void main() {
         activities: [],
       );
       final p = buildPreview(s, demoNow);
-      expect(p.sessions.first.endsAt, end);
-      expect(p.sessions.last.startsAt, end);
-      expect(p.sessions.last.endsAt, DateTime.utc(2026, 11, 9, 14, 30));
-      expect(p.unallocated.single.taskId, 'a');
-      expect(p.unallocated.single.minutes, 60);
+      expect(p.sessions.map((s) => (s.taskId, s.startsAt, s.endsAt)), [
+        ('a', DateTime.utc(2026, 11, 9, 13), end),
+        ('b', end, DateTime.utc(2026, 11, 9, 14, 30)),
+      ]);
+      expect(p.unallocated.single.toJson(), {
+        'task_id': 'a',
+        'minutes': 60,
+        'reason': 'insufficient_capacity',
+      });
     },
   );
   test('ceil_now rounds microseconds up; WIB midnight bounds 14 dates', () {
@@ -134,12 +139,16 @@ void main() {
         ),
       ],
     );
-    expect(buildPreview(s, demoNow).sessions.map((v) => v.taskId), [
-      'old',
-      'a',
-      'b',
-      'z',
-    ]);
+    final p = buildPreview(s, demoNow);
+    expect(p.sessions.map((v) => v.taskId), ['old', 'a', 'b', 'z']);
+    final reordered = PlannerSnapshot(
+      revision: s.revision,
+      tasks: s.tasks.reversed.toList(),
+      timeWindows: s.timeWindows,
+      activities: s.activities,
+      sessions: s.sessions,
+    );
+    expect(buildPreview(reordered, demoNow).toJson(), p.toJson());
   });
   test('past_deadline, outside_horizon, exact window edge and no capacity', () {
     final s = sample(
@@ -150,10 +159,12 @@ void main() {
       ],
       windows: [],
     );
-    expect(buildPreview(s, demoNow).unallocated.map((v) => v.reason), [
-      UnallocatedReason.pastDeadline,
-      UnallocatedReason.insufficientCapacity,
-      UnallocatedReason.outsideHorizon,
+    final p = buildPreview(s, demoNow);
+    expect(p.sessions, isEmpty);
+    expect(p.unallocated.map((v) => v.toJson()), [
+      {'task_id': 'past', 'minutes': 60, 'reason': 'past_deadline'},
+      {'task_id': 'edge', 'minutes': 60, 'reason': 'insufficient_capacity'},
+      {'task_id': 'future', 'minutes': 60, 'reason': 'outside_horizon'},
     ]);
     final allocated = sample(tasks: [task('future', DateTime.utc(2026, 12))]);
     expect(buildPreview(allocated, demoNow).unallocated, isEmpty);
@@ -293,5 +304,44 @@ void main() {
     watch.stop();
     expect(preview.sessions, isNotEmpty);
     expect(watch.elapsedMilliseconds, lessThanOrEqualTo(1000));
+    expect(preview.inputRevision, input.revision);
+    final effectiveWindows = expandWindows(input, demoNow);
+    final ordered = [...preview.sessions]
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    final scheduledMinutes = <String, int>{};
+    final byId = {for (final task in tasks) task.id: task};
+    for (var i = 0; i < ordered.length; i++) {
+      final session = ordered[i];
+      final start = session.startsAt;
+      final end = session.endsAt;
+      expect(end.isAfter(start), isTrue);
+      expect(end.isAfter(byId[session.taskId]!.deadlineAt), isFalse);
+      if (i > 0) {
+        expect(start.isBefore(ordered[i - 1].endsAt), isFalse);
+      }
+      expect(
+        effectiveWindows.any(
+          (slot) => !start.isBefore(slot.start) && !end.isAfter(slot.end),
+        ),
+        isTrue,
+      );
+      final minutes = end.difference(start).inMinutes;
+      scheduledMinutes.update(
+        session.taskId,
+        (sum) => sum + minutes,
+        ifAbsent: () => minutes,
+      );
+    }
+    final unallocatedMinutes = {
+      for (final remainder in preview.unallocated)
+        remainder.taskId: remainder.minutes,
+    };
+    for (final task in tasks) {
+      expect(
+        (scheduledMinutes[task.id] ?? 0) + (unallocatedMinutes[task.id] ?? 0),
+        task.remainingMinutes,
+        reason: task.id,
+      );
+    }
   });
 }

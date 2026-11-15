@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:waktu_tugas/app/app.dart';
 import 'package:waktu_tugas/features/shared.dart';
 import 'package:waktu_tugas/planner/models.dart';
+import 'package:waktu_tugas/planner/schedule.dart';
 import 'package:waktu_tugas/state/auth_controller.dart';
 import 'package:waktu_tugas/state/planner_controller.dart';
 
@@ -189,6 +190,119 @@ void main() {
     expect(p.snapshot.timeWindows.last.weekday, isNotNull);
     expect(p.snapshot.timeWindows.last.date, isNull);
     expect(p.snapshot.timeWindows.last.endMinute, 1440);
+  });
+  testWidgets('Waktu form edits drive effective WIB capacity and preview', (
+    t,
+  ) async {
+    final now = DateTime.utc(2026, 11, 9, 11); // Monday, 18.00 WIB.
+    final p = PlannerController(
+      clock: () => now,
+      initial: PlannerSnapshot(
+        revision: 0,
+        tasks: [
+          Task(
+            id: 'task',
+            title: 'Belajar',
+            deadlineAt: DateTime.utc(2026, 11, 9, 16),
+            remainingMinutes: 240,
+            createdAt: now,
+          ),
+        ],
+        timeWindows: [],
+        activities: [],
+        sessions: [],
+      ),
+    );
+    await boot(t, p);
+    await tab(t, 'Waktu');
+
+    Future<void> tap(Finder finder) async {
+      await t.ensureVisible(finder);
+      await t.tap(finder);
+      await t.pumpAndSettle();
+    }
+
+    Future<void> hours(String start, String end) async {
+      await t.enterText(find.byKey(const Key('start-time')), start);
+      await t.enterText(find.byKey(const Key('end-time')), end);
+      await tap(find.text('Simpan waktu'));
+    }
+
+    Future<void> edit(TimeWindow window) =>
+        tap(find.byTooltip('Ubah ${window.id}'));
+
+    Future<void> remove(TimeWindow window) async {
+      await tap(find.byTooltip('Hapus ${window.id}'));
+      await tap(find.text('Hapus rentang'));
+      expect(find.byTooltip('Hapus ${window.id}'), findsNothing);
+    }
+
+    await tap(find.text('Tambah rentang'));
+    await tap(find.byKey(const Key('scope')));
+    await tap(find.text('Mingguan').last);
+    await hours('19:00', '22:00');
+    final weekly = p.snapshot.timeWindows.single;
+    expect(weekly.weekday, DateTime.monday);
+    expect(find.text('Senin • 19:00–22:00 WIB'), findsOneWidget);
+
+    await tap(find.text('Tambah rentang'));
+    await hours('21:00', '23:00');
+    final extra = p.snapshot.timeWindows.singleWhere((w) => w.date != null);
+    expect(extra.date, '2026-11-09');
+    expect(find.text('9 Nov 2026 • 21:00–23:00 WIB'), findsOneWidget);
+    expect(find.text('420 menit'), findsWidgets);
+
+    await tap(find.text('Tambah kegiatan'));
+    await t.enterText(
+      find.widgetWithText(TextFormField, 'Label kegiatan (opsional)'),
+      'Kuliah',
+    );
+    final revision = p.snapshot.revision;
+    await hours('21:00', '20:00');
+    expect(find.text('Jam selesai harus setelah mulai.'), findsOneWidget);
+    expect(p.snapshot.revision, revision);
+    expect(p.snapshot.activities, isEmpty);
+    await hours('20:00', '21:00');
+    final block = p.snapshot.activities.single;
+    expect(block.date, '2026-11-09');
+    expect(find.text('Kegiatan sekali: Kuliah'), findsOneWidget);
+    expect(find.text('360 menit'), findsWidgets);
+    expect(
+      find.text('Senin, 9 November 2026 · 19:00–20:00 (60 menit)'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Senin, 9 November 2026 · 21:00–23:00 (120 menit)'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Senin, 16 November 2026 · 19:00–22:00 (180 menit)'),
+      findsOneWidget,
+    );
+    final preview = buildPreview(p.snapshot, now);
+    expect(preview.sessions.map((s) => [s.startsAt.hour, s.endsAt.hour]), [
+      [12, 13],
+      [14, 16],
+    ]);
+    expect(preview.unallocated.single.minutes, 60);
+
+    await edit(block);
+    await hours('20:00', '22:00');
+    expect(find.text('300 menit'), findsWidgets);
+    await edit(weekly);
+    await hours('19:00', '21:00');
+    expect(find.text('240 menit'), findsWidgets);
+    await edit(extra);
+    await hours('21:00', '24:00');
+    expect(find.text('300 menit'), findsWidgets);
+    await remove(block);
+    expect(find.text('420 menit'), findsWidgets);
+    await remove(extra);
+    expect(find.text('240 menit'), findsWidgets);
+    await remove(weekly);
+    expect(find.text('0 menit'), findsWidgets);
+    expect(p.snapshot.activities, isEmpty);
+    expect(p.snapshot.timeWindows, isEmpty);
   });
   testWidgets('delete task requires explicit confirmation', (t) async {
     final p = PlannerController();
