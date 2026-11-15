@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../app/theme.dart';
 import '../../planner/models.dart';
+import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
 
@@ -12,20 +15,35 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
+    final isLargeText = MediaQuery.textScalerOf(context).scale(14) > 18;
+
     return ListenableBuilder(
       listenable: planner,
       builder: (context, _) {
         final tasks = planner.snapshot.tasks;
         final active = tasks.where((t) => t.remainingMinutes > 0).toList()
           ..sort((a, b) => a.deadlineAt.compareTo(b.deadlineAt));
-        final late = active.where((t) => !t.deadlineAt.isAfter(planner.now));
-        final sessions =
+        final totalRemainingMinutes = active.fold(
+          0,
+          (int n, t) => n + t.remainingMinutes,
+        );
+
+        final late = active
+            .where((t) => !t.deadlineAt.isAfter(planner.now))
+            .toList();
+        final upcomingActive = active
+            .where((t) => t.deadlineAt.isAfter(planner.now))
+            .toList();
+
+        final plannedSessions =
             planner.snapshot.sessions
                 .where((s) => s.status == SessionStatus.planned)
                 .toList()
               ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
-        final next = sessions.firstOrNull;
+        final next = plannedSessions.firstOrNull;
+        final nextTask = next != null ? planner.taskById(next.taskId) : null;
         final started = next != null && !next.startsAt.isAfter(planner.now);
+
         final today =
             planner.snapshot.sessions
                 .where(
@@ -35,115 +53,266 @@ class HomeScreen extends StatelessWidget {
                 )
                 .toList()
               ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+
         final locked = planner.isPending || planner.isOfflineSnapshot;
+
         return PageContent(
           children: [
-            FocusPanel(
-              eyebrow: dateLabel(planner.now),
-              title: started
-                  ? 'Saatnya catat\nlangkah Anda.'
-                  : 'Beri ruang\nuntuk fokus.',
-              description:
-                  '${active.length} tugas aktif \u00b7 ${active.fold(0, (int n, t) => n + t.remainingMinutes)} menit tersisa',
-              footer: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (next != null) ...[
-                    Divider(color: colors.onPanel, height: 1),
-                    const SizedBox(height: AppLayout.space16),
-                    Text(
-                      started ? 'SESI PERLU DICATAT' : 'SESI BERIKUTNYA',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.accent,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: AppLayout.space8),
-                    Text(
-                      planner.taskById(next.taskId)?.title ?? next.taskId,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: colors.onPanel,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppLayout.space8),
-                    Text(
-                      '${dateLabel(next.startsAt)}\n${clockLabel(next.startsAt)} \u2013 ${clockLabel(next.endsAt)} WIB',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: colors.onPanel),
-                    ),
-                    const SizedBox(height: AppLayout.page),
-                    AppButton(
-                      label: started
-                          ? 'Catat progres sesi'
-                          : 'Buka sesi berikutnya',
-                      highlighted: true,
-                      icon: started ? 'imgCheckCircle' : 'imgArrowRight',
-                      onPressed: started && locked
-                          ? null
-                          : () => context.push('/session/${next.id}'),
-                    ),
-                  ] else if (tasks.isEmpty)
-                    AppButton(
-                      label: 'Tambah tugas',
-                      highlighted: true,
-                      icon: 'imgPlus',
-                      onPressed: locked
-                          ? null
-                          : () => context.push('/task/new'),
-                    )
-                  else
-                    AppButton(
-                      label: 'Tinjau jadwal',
-                      highlighted: true,
-                      icon: 'imgArrowRight',
-                      onPressed: () => context.go('/schedule'),
-                    ),
-                ],
-              ),
+            // =================================================================
+            // 1. FOCUS PANEL: PRIORITAS UTAMA APA YANG HARUS DIKERJAKAN
+            // =================================================================
+            _buildFocusPanel(
+              context: context,
+              colors: colors,
+              tasks: tasks,
+              active: active,
+              totalMinutes: totalRemainingMinutes,
+              next: next,
+              nextTask: nextTask,
+              started: started,
+              locked: locked,
+              isLargeText: isLargeText,
             ),
+
+            // =================================================================
+            // 2. PERINGATAN & TINDAKAN JADWAL
+            // =================================================================
             if (planner.needsReschedule) ...[
-              const SizedBox(height: AppLayout.space16),
-              Notice(
-                title: 'Jadwal perlu diperbarui',
-                message:
-                    'Data berubah. Tinjau jadwal sebelum mulai sesi berikutnya.',
+              const SizedBox(height: AppLayout.space12),
+              PaperCard(
                 color: colors.warningBg,
-                icon: 'imgAlertCircle',
-              ),
-            ],
-            if (tasks.isEmpty)
-              TextButton(
-                onPressed: () => context.go('/time'),
-                child: const Text('Atur waktu yang diizinkan'),
-              ),
-            ErrorNotice(planner.error),
-            if (late.isNotEmpty) ...[
-              const SizedBox(height: AppLayout.section),
-              const SectionHeader(
-                title: 'Tugas terlambat',
-                subtitle: 'Perbarui tenggat dan estimasi pengerjaan.',
-              ),
-              for (final task in late)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: DesignIcon(
-                    'imgAlertCircle',
-                    color: colors.dangerInk,
-                  ),
-                  title: Text(task.title),
-                  subtitle: Text(
-                    'Terlambat \u00b7 ${task.remainingMinutes} menit tersisa',
-                  ),
-                  trailing: const DesignIcon('imgChevronRight'),
-                  onTap: () => context.push('/task/${task.id}'),
+                borderColor: colors.warningInk.withValues(alpha: 0.3),
+                padding: const EdgeInsets.all(AppLayout.space12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: DesignIcon(
+                            'imgAlertCircle',
+                            size: 20,
+                            color: colors.warningInk,
+                          ),
+                        ),
+                        const SizedBox(width: AppLayout.space12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Jadwal perlu diperbarui',
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: colors.warningInk,
+                                    ),
+                              ),
+                              const SizedBox(height: AppLayout.space4),
+                              Text(
+                                'Data tugas atau rentang waktu berubah. Perbarui jadwal agar sesi belajar tetap konsisten.',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: colors.warningInk),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppLayout.space8),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton.icon(
+                        onPressed: () => context.go('/schedule'),
+                        icon: const DesignIcon('imgArrowRight', size: 16),
+                        label: const Text('Buka jadwal'),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
             ],
-            const SizedBox(height: AppLayout.space8),
+
+            if (planner.preview != null &&
+                planner.preview!.unallocated.isNotEmpty) ...[
+              const SizedBox(height: AppLayout.space12),
+              PaperCard(
+                color: colors.warningBg,
+                borderColor: colors.warningInk.withValues(alpha: 0.3),
+                padding: const EdgeInsets.all(AppLayout.space12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: DesignIcon(
+                            'imgAlertCircle',
+                            size: 20,
+                            color: colors.warningInk,
+                          ),
+                        ),
+                        const SizedBox(width: AppLayout.space12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sebagian tugas belum tertampung kapasitas',
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: colors.warningInk,
+                                    ),
+                              ),
+                              const SizedBox(height: AppLayout.space4),
+                              for (final u in planner.preview!.unallocated)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    '\u2022 ${planner.taskById(u.taskId)?.title ?? u.taskId}: ${u.minutes} menit belum terjadwal',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: colors.warningInk),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppLayout.space8),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: AppLayout.space8,
+                      runSpacing: AppLayout.space4,
+                      children: [
+                        TextButton(
+                          onPressed: () => context.go('/time'),
+                          child: const Text('Tambah waktu'),
+                        ),
+                        TextButton(
+                          onPressed: () => context.go('/schedule'),
+                          child: const Text('Tinjau jadwal'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            ErrorNotice(planner.error),
+
+            // =================================================================
+            // 3. TUGAS PERLU PERHATIAN (TERLAMBAT)
+            // =================================================================
+            if (late.isNotEmpty) ...[
+              const SizedBox(height: AppLayout.space16),
+              SectionHeader(
+                title: 'Tugas terlambat',
+                subtitle:
+                    'Tenggat telah lewat. Perbarui tenggat atau selesaikan tugas.',
+                trailing: StatusBadge(
+                  '${late.length} terlambat',
+                  tone: StatusTone.danger,
+                  icon: 'imgAlertCircle',
+                ),
+              ),
+              for (final task in late) ...[
+                PaperCard(
+                  margin: const EdgeInsets.only(bottom: AppLayout.space8),
+                  padding: EdgeInsets.zero,
+                  borderColor: colors.dangerInk.withValues(alpha: 0.3),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppLayout.radius),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => context.push('/task/${task.id}'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppLayout.space16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: colors.dangerBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: DesignIcon(
+                                'imgAlertCircle',
+                                size: 18,
+                                color: colors.dangerInk,
+                              ),
+                            ),
+                            const SizedBox(width: AppLayout.space12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    task.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                  if (task.course case final course?)
+                                    Text(
+                                      course,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: colors.inkSecondary,
+                                          ),
+                                    ),
+                                  const SizedBox(height: AppLayout.space4),
+                                  Text(
+                                    'Lewat: ${dateTimeLabel(task.deadlineAt)}',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: colors.dangerInk,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                  Text(
+                                    '${task.remainingMinutes} menit tersisa',
+                                    style: AppTypography.time.copyWith(
+                                      color: colors.inkSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppLayout.space8),
+                            DesignIcon(
+                              'imgChevronRight',
+                              size: 20,
+                              color: colors.inkMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+
+            // =================================================================
+            // 4. AGENDA HARI INI
+            // =================================================================
+            const SizedBox(height: AppLayout.space16),
             SectionHeader(
               title: 'Agenda hari ini',
+              subtitle: dateLabel(planner.now),
               trailing: TextButton(
                 onPressed: () => context.go('/schedule'),
                 child: const Text('Lihat semua'),
@@ -152,67 +321,427 @@ class HomeScreen extends StatelessWidget {
             if (today.isEmpty)
               PaperCard(
                 color: colors.primarySoft,
+                padding: const EdgeInsets.all(AppLayout.space16),
                 child: Row(
                   children: [
-                    DesignIcon('imgCalendar', color: colors.primary),
-                    SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DesignIcon(
+                        'imgCalendar',
+                        color: colors.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: AppLayout.space12),
                     Expanded(
-                      child: Text(
-                        'Belum ada sesi terkonfirmasi hari ini.',
-                        style: TextStyle(color: colors.inkSecondary),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tidak ada sesi belajar hari ini',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            active.isNotEmpty
+                                ? 'Manfaatkan hari untuk istirahat atau tinjau jadwal belajar mendatang.'
+                                : 'Tidak ada tugas aktif atau sesi belajar yang dijadwalkan.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.inkSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              for (final session in today)
+                SessionCard(
+                  session: session,
+                  title:
+                      planner.taskById(session.taskId)?.title ?? session.taskId,
+                  onTap: () => context.push('/session/${session.id}'),
+                ),
+
+            // =================================================================
+            // 5. TENGGAT TERDEKAT (MENDATANG)
+            // =================================================================
+            if (upcomingActive.isNotEmpty) ...[
+              const SizedBox(height: AppLayout.section),
+              SectionHeader(
+                title: 'Tenggat terdekat',
+                subtitle: 'Prioritas berdasarkan batas waktu pengumpulan tugas.',
+                trailing: TextButton(
+                  onPressed: () => context.go('/tasks'),
+                  child: const Text('Semua tugas'),
+                ),
+              ),
+              for (final task in upcomingActive.take(4))
+                _buildUpcomingTaskCard(
+                  context: context,
+                  task: task,
+                  now: planner.now,
+                  colors: colors,
+                  isLargeText: isLargeText,
+                ),
+            ],
+
+            // =================================================================
+            // 6. STATUS TUGAS SELESAI
+            // =================================================================
+            if (tasks.isNotEmpty && active.isEmpty) ...[
+              const SizedBox(height: AppLayout.section),
+              PaperCard(
+                color: colors.successBg,
+                borderColor: colors.successInk.withValues(alpha: 0.3),
+                padding: const EdgeInsets.all(AppLayout.space16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        shape: BoxShape.circle,
+                      ),
+                      child: DesignIcon(
+                        'imgCheckCircle',
+                        color: colors.successInk,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: AppLayout.space12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Semua target tugas tuntas!',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: colors.successInk,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: AppLayout.space4),
+                          Text(
+                            'Tidak ada sisa pengerjaan pada seluruh ${tasks.length} tugas. Istirahat yang cukup atau buat tugas baru saat semester berjalan.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.successInk),
+                          ),
+                          const SizedBox(height: AppLayout.space12),
+                          Wrap(
+                            spacing: AppLayout.space8,
+                            runSpacing: AppLayout.space8,
+                            children: [
+                              AppButton(
+                                label: 'Lihat daftar tugas',
+                                icon: 'imgNavigationCheckSquare',
+                                secondary: true,
+                                onPressed: () => context.go('/tasks'),
+                              ),
+                              AppButton(
+                                label: 'Tambah tugas baru',
+                                icon: 'imgPlus',
+                                onPressed: locked
+                                    ? null
+                                    : () => context.push('/task/new'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            for (final session in today)
-              SessionCard(
-                session: session,
-                title:
-                    planner.taskById(session.taskId)?.title ?? session.taskId,
-                onTap: () => context.push('/session/${session.id}'),
-              ),
-            if (active.any((t) => t.deadlineAt.isAfter(planner.now))) ...[
-              const SizedBox(height: AppLayout.section),
-              const SectionHeader(title: 'Jangan lewatkan tenggat'),
-              for (final task
-                  in active
-                      .where((t) => t.deadlineAt.isAfter(planner.now))
-                      .take(3)) ...[
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    task.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      '${dateTimeLabel(task.deadlineAt)}\n${task.remainingMinutes} menit tersisa',
-                    ),
-                  ),
-                  trailing: const DesignIcon('imgChevronRight', size: 20),
-                  onTap: () => context.push('/task/${task.id}'),
-                ),
-                const Divider(height: 16),
-              ],
             ],
-            if (planner.preview != null &&
-                planner.preview!.unallocated.isNotEmpty)
-              Notice(
-                title: 'Pratinjau terakhir \u00b7 belum disimpan',
-                color: colors.warningBg,
-                icon: 'imgAlertCircle',
-                message: planner.preview!.unallocated
-                    .map(
-                      (u) =>
-                          '${planner.taskById(u.taskId)?.title ?? u.taskId}: ${u.minutes} menit belum tertampung',
-                    )
-                    .join('\n'),
+
+            // =================================================================
+            // 7. AKUN KOSONG: PANDUAN AWAL
+            // =================================================================
+            if (tasks.isEmpty) ...[
+              const SizedBox(height: AppLayout.section),
+              EmptyState(
+                title: 'Langkah awal penggunaan',
+                message:
+                    '1. Masukkan tugas kuliah beserta batas tenggat dan estimasi waktu pengerjaan.\n'
+                    '2. Tentukan jam ketersediaan belajar Anda di tab Waktu.\n'
+                    '3. WaktuTugas akan otomatis menyusun jadwal sesi belajar yang realistis dan bebas bentrok.',
+                action: AppButton(
+                  label: 'Atur waktu belajar',
+                  icon: 'imgClock',
+                  secondary: true,
+                  onPressed: () => context.go('/time'),
+                ),
               ),
+            ],
           ],
         );
       },
+    );
+  }
+
+  // ===========================================================================
+  // WIDGET HELPER: FOCUS PANEL
+  // ===========================================================================
+  Widget _buildFocusPanel({
+    required BuildContext context,
+    required AppColors colors,
+    required List<Task> tasks,
+    required List<Task> active,
+    required int totalMinutes,
+    required PlannerSession? next,
+    required Task? nextTask,
+    required bool started,
+    required bool locked,
+    required bool isLargeText,
+  }) {
+    if (tasks.isEmpty) {
+      return FocusPanel(
+        eyebrow: dateLabel(planner.now),
+        title: 'Mulai perjalanan\nbelajar Anda.',
+        description:
+            'Belum ada tugas atau jadwal terdaftar. Tambahkan tugas pertama Anda untuk memulai perencanaan terarah.',
+        footer: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppButton(
+              label: 'Tambah tugas pertama',
+              highlighted: true,
+              icon: 'imgPlus',
+              onPressed: locked ? null : () => context.push('/task/new'),
+            ),
+            const SizedBox(height: AppLayout.space8),
+            AppButton(
+              label: 'Atur waktu belajar',
+              secondary: true,
+              icon: 'imgClock',
+              onPressed: () => context.go('/time'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (active.isEmpty) {
+      return FocusPanel(
+        eyebrow: dateLabel(planner.now),
+        title: 'Semua tugas\ntelah selesai!',
+        description:
+            'Kerja luar biasa! Seluruh ${tasks.length} tugas telah tuntas dikerjakan.',
+        footer: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppButton(
+              label: 'Tambah tugas baru',
+              highlighted: true,
+              icon: 'imgPlus',
+              onPressed: locked ? null : () => context.push('/task/new'),
+            ),
+            const SizedBox(height: AppLayout.space8),
+            AppButton(
+              label: 'Lihat daftar tugas',
+              secondary: true,
+              icon: 'imgCheckCircle',
+              onPressed: () => context.go('/tasks'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (next != null) {
+      return FocusPanel(
+        eyebrow: dateLabel(planner.now),
+        title: started ? 'Saatnya catat\nlangkah Anda.' : 'Beri ruang\nuntuk fokus.',
+        description:
+            '${active.length} tugas aktif \u00b7 $totalMinutes menit tersisa',
+        footer: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Divider(color: colors.onPanel.withValues(alpha: 0.3), height: 1),
+            const SizedBox(height: AppLayout.space16),
+            Text(
+              started ? 'SESI PERLU DICATAT' : 'SESI BERIKUTNYA',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colors.accent,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: AppLayout.space8),
+            Text(
+              nextTask?.title ?? next.taskId,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: colors.onPanel,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (nextTask?.course case final course?) ...[
+              const SizedBox(height: 2),
+              Text(
+                course,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onPanel.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppLayout.space8),
+            Text(
+              '${dateLabel(next.startsAt)}\n${clockLabel(next.startsAt)} \u2013 ${clockLabel(next.endsAt)} WIB (${next.endsAt.difference(next.startsAt).inMinutes} menit)',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onPanel),
+            ),
+            const SizedBox(height: AppLayout.page),
+            AppButton(
+              label: started ? 'Catat progres sesi' : 'Buka sesi berikutnya',
+              highlighted: true,
+              icon: started ? 'imgCheckCircle' : 'imgArrowRight',
+              // Selalu izinkan navigasi untuk membaca detail sesi (bahkan saat luring)
+              onPressed: () => context.push('/session/${next.id}'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Ada tugas aktif tapi belum ada sesi yang terencana
+    return FocusPanel(
+      eyebrow: dateLabel(planner.now),
+      title: 'Susun jadwal\nuntuk mulai.',
+      description:
+          '${active.length} tugas aktif ($totalMinutes menit) belum memiliki jadwal sesi belajar.',
+      footer: AppButton(
+        label: 'Tinjau & susun jadwal',
+        highlighted: true,
+        icon: 'imgCalendar',
+        onPressed: () => context.go('/schedule'),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // WIDGET HELPER: UPCOMING DEADLINE CARD
+  // ===========================================================================
+  Widget _buildUpcomingTaskCard({
+    required BuildContext context,
+    required Task task,
+    required DateTime now,
+    required AppColors colors,
+    required bool isLargeText,
+  }) {
+    final nowJkt = tz.TZDateTime.from(now, jakarta);
+    final deadlineJkt = tz.TZDateTime.from(task.deadlineAt, jakarta);
+
+    final isToday =
+        nowJkt.year == deadlineJkt.year &&
+        nowJkt.month == deadlineJkt.month &&
+        nowJkt.day == deadlineJkt.day;
+
+    final tomorrowJkt = tz.TZDateTime(
+      jakarta,
+      nowJkt.year,
+      nowJkt.month,
+      nowJkt.day + 1,
+    );
+    final isTomorrow =
+        tomorrowJkt.year == deadlineJkt.year &&
+        tomorrowJkt.month == deadlineJkt.month &&
+        tomorrowJkt.day == deadlineJkt.day;
+
+    final hoursLeft = task.deadlineAt.difference(now).inHours;
+
+    final (badgeLabel, badgeTone, badgeIcon) = isToday
+        ? ('Hari ini', StatusTone.warning, 'imgClock')
+        : isTomorrow
+        ? ('Besok', StatusTone.info, 'imgCalendar')
+        : hoursLeft <= 48
+        ? ('$hoursLeft jam lagi', StatusTone.info, 'imgClock')
+        : (
+            DateFormat('d MMM', 'id_ID').format(deadlineJkt),
+            StatusTone.neutral,
+            'imgCalendar',
+          );
+
+    return PaperCard(
+      margin: const EdgeInsets.only(bottom: AppLayout.space8),
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppLayout.radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push('/task/${task.id}'),
+          child: Padding(
+            padding: const EdgeInsets.all(AppLayout.space16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppLayout.space8,
+                        runSpacing: AppLayout.space4,
+                        children: [
+                          StatusBadge(
+                            badgeLabel,
+                            tone: badgeTone,
+                            icon: badgeIcon,
+                          ),
+                          if (task.course case final course?)
+                            Text(
+                              course,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.inkSecondary),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppLayout.space8),
+                      Text(
+                        task.title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Tenggat ${dateTimeLabel(task.deadlineAt)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.inkSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${task.remainingMinutes} menit tersisa',
+                        style: AppTypography.time.copyWith(
+                          color: colors.inkSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppLayout.space8),
+                DesignIcon(
+                  'imgChevronRight',
+                  size: 20,
+                  color: colors.inkMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
