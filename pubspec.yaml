@@ -71,6 +71,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - assets/logo.png
     - assets/figma/
     - assets/fonts/IBMPlexMono-OFL.txt
   fonts:
