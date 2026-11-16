@@ -1,5 +1,16 @@
 # Hasil Pengujian WaktuTugas 1.0.0
 
+## Uji ulang dengan Docker aktif — 16 November 2026 (WIB)
+
+| Area | Hasil aktual |
+| --- | --- |
+| Supabase lokal | `supabase start` berhasil. `supabase migration up` menerapkan `005_subtasks.sql`; `supabase migration list` mencatat 001–005. |
+| Database/RLS | `supabase test db` lulus **322/322** pemeriksaan pada `authorization.sql`, `transactions.sql`, dan `whatsapp.sql`. |
+| RPC dua akun | Dengan dua akun lokal kosong dan terkonfirmasi, `flutter test --no-pub test/backend/planner_rpc_test.dart` lulus **1/1 dalam 24 detik**, termasuk isolasi pemilik, rollback, konkurensi konfirmasi/progres, dan pembersihan fixture. |
+| Mock OpenWA | `node --test supabase/functions/whatsapp.test.mjs`: **2 lulus, 0 gagal, 1 dilewati**; yang dilewati membutuhkan skenario Supabase Auth/worker lokal. |
+| Flutter | `flutter pub get --offline` lulus; `flutter analyze --no-pub` lulus tanpa isu; `flutter test --no-pub test/planner test/data test/ui` lulus **141/141**. |
+| Android | Emulator `emulator-5554`, Android 15/API 35 terdeteksi. Percobaan integration test terbaru berhenti saat build sebelum tes karena ruang C: tersisa sekitar **0,01 GB** (`compressDebugAssets: There is not enough space on the disk`). Tidak ada data aplikasi yang diuji pada percobaan ini. Uji emulator sebelumnya: `app_flow_test.dart` dan `storage_test.dart` masing-masing lulus 1/1. |
+
 ## Verifikasi workspace lokal — 16 November 2026 (WIB)
 
 | Area | Perintah / hasil aktual |
