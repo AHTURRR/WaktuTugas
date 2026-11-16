@@ -9,7 +9,7 @@ void main() {
   testWidgets('Android local demo: login, preview, confirm, progress', (
     tester,
   ) async {
-    app.main();
+    await app.main();
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Buka demo lokal'));
     await tester.tap(find.text('Buka demo lokal'));

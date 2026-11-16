@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
@@ -17,14 +18,19 @@ class SessionScreen extends StatefulWidget {
   State<SessionScreen> createState() => _SessionScreenState();
 }
 
-class _SessionScreenState extends State<SessionScreen> {
+class _SessionScreenState extends State<SessionScreen>
+    with WidgetsBindingObserver {
   final form = GlobalKey<FormState>();
   final remaining = TextEditingController();
   bool recording = false;
+  bool timerBusy = false;
+  Duration? recordedFocusDuration;
+  Timer? _ticker;
   late final int revision;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     revision = widget.planner.snapshot.revision;
     final session = widget.planner.sessionById(widget.sessionId);
     if (session != null) {
@@ -35,12 +41,84 @@ class _SessionScreenState extends State<SessionScreen> {
               .toString() ??
           '0';
     }
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (widget.planner.isTimerActiveForSession(widget.sessionId) &&
+          (widget.planner.activeSessionTimer?.isRunning ?? false)) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
     remaining.dispose();
     super.dispose();
+  }
+
+  String _formatClock(Duration d) {
+    final total = d.inSeconds < 0 ? 0 : d.inSeconds;
+    final hours = total ~/ 3600;
+    final minutes = (total % 3600) ~/ 60;
+    final seconds = total % 60;
+    final mm = minutes.toString().padLeft(2, '0');
+    final ss = seconds.toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:$mm:$ss';
+    }
+    return '$mm:$ss';
+  }
+
+  String _formatFocusDuration(Duration d) {
+    final total = d.inSeconds < 0 ? 0 : d.inSeconds;
+    final minutes = total ~/ 60;
+    final seconds = total % 60;
+    if (minutes == 0) return '$seconds detik';
+    if (seconds == 0) return '$minutes menit';
+    return '$minutes menit $seconds detik';
+  }
+
+  Future<void> _startTimer() async {
+    if (timerBusy) return;
+    setState(() => timerBusy = true);
+    await widget.planner.startSessionTimer(widget.sessionId);
+    if (mounted) setState(() => timerBusy = false);
+  }
+
+  Future<void> _pauseTimer() async {
+    if (timerBusy) return;
+    setState(() => timerBusy = true);
+    await widget.planner.pauseSessionTimer(widget.sessionId);
+    if (mounted) setState(() => timerBusy = false);
+  }
+
+  Future<void> _resumeTimer() async {
+    if (timerBusy) return;
+    setState(() => timerBusy = true);
+    await widget.planner.resumeSessionTimer(widget.sessionId);
+    if (mounted) setState(() => timerBusy = false);
+  }
+
+  Future<void> _finishTimer() async {
+    if (timerBusy) return;
+    setState(() => timerBusy = true);
+    final duration = await widget.planner.finishSessionTimer(widget.sessionId);
+    if (mounted) {
+      setState(() {
+        timerBusy = false;
+        recordedFocusDuration = duration;
+        recording = true;
+      });
+    }
   }
 
   Future<void> save(SessionStatus status) async {
@@ -205,6 +283,123 @@ class _SessionScreenState extends State<SessionScreen> {
                       ],
                     ),
                   ),
+                if (!recording && s.status == SessionStatus.planned)
+                  Builder(
+                    builder: (context) {
+                      final isThisActive = p.isTimerActiveForSession(
+                        widget.sessionId,
+                      );
+                      final isRunning =
+                          isThisActive &&
+                          (p.activeSessionTimer?.isRunning ?? false);
+                      final hasOther = p.hasOtherActiveTimer(widget.sessionId);
+                      final elapsed = isThisActive
+                          ? p.sessionTimerElapsed(widget.sessionId)
+                          : Duration.zero;
+                      return PaperCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: SectionHeader(title: 'Timer fokus'),
+                                ),
+                                const SizedBox(width: AppLayout.space8),
+                                StatusBadge(
+                                  isRunning
+                                      ? 'Berjalan'
+                                      : isThisActive
+                                      ? 'Dijeda'
+                                      : 'Siap',
+                                  tone: isRunning
+                                      ? StatusTone.success
+                                      : isThisActive
+                                      ? StatusTone.warning
+                                      : StatusTone.neutral,
+                                  icon: 'imgClock',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppLayout.space8),
+                            Text(
+                              _formatClock(elapsed),
+                              key: const Key('session-timer-display'),
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            if (!canClose) ...[
+                              const SizedBox(height: AppLayout.space8),
+                              Text(
+                                'Timer dapat dimulai saat sesi sudah masuk waktunya.',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: colors.inkSecondary),
+                              ),
+                            ],
+                            if (hasOther) ...[
+                              const SizedBox(height: AppLayout.space12),
+                              Notice(
+                                title: 'Timer aktif di sesi lain',
+                                message:
+                                    'Satu akun hanya dapat menjalankan satu timer aktif. Selesaikan timer pada sesi lain terlebih dahulu.',
+                                color: colors.warningBg,
+                              ),
+                            ] else ...[
+                              const SizedBox(height: AppLayout.space12),
+                              Wrap(
+                                spacing: AppLayout.space8,
+                                runSpacing: AppLayout.space8,
+                                children: [
+                                  if (!isThisActive)
+                                    AppButton(
+                                      label: 'Mulai',
+                                      icon: 'imgClock',
+                                      onPressed:
+                                          !canClose || locked || timerBusy
+                                          ? null
+                                          : _startTimer,
+                                    )
+                                  else if (isRunning) ...[
+                                    AppButton(
+                                      label: 'Jeda',
+                                      secondary: true,
+                                      onPressed: timerBusy ? null : _pauseTimer,
+                                    ),
+                                    AppButton(
+                                      label: 'Selesai',
+                                      icon: 'imgCheck',
+                                      onPressed:
+                                          !canClose || locked || timerBusy
+                                          ? null
+                                          : _finishTimer,
+                                    ),
+                                  ] else ...[
+                                    AppButton(
+                                      label: 'Lanjutkan',
+                                      icon: 'imgClock',
+                                      onPressed: timerBusy
+                                          ? null
+                                          : _resumeTimer,
+                                    ),
+                                    AppButton(
+                                      label: 'Selesai',
+                                      icon: 'imgCheck',
+                                      onPressed:
+                                          !canClose || locked || timerBusy
+                                          ? null
+                                          : _finishTimer,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 if (s.status != SessionStatus.planned) ...[
                   Notice(
                     title: 'Hanya baca · sesi sudah ditutup',
@@ -269,6 +464,28 @@ class _SessionScreenState extends State<SessionScreen> {
                                 ),
                           ),
                         ),
+                        if (recordedFocusDuration != null) ...[
+                          const SizedBox(height: AppLayout.space8),
+                          Container(
+                            key: const Key('recorded-focus-duration'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.primarySoft,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Durasi fokus · ${_formatFocusDuration(recordedFocusDuration!)}',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.onPrimarySoft,
+                                  ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: AppLayout.space16),
                         const SectionHeader(
                           title: 'Berapa menit yang masih dibutuhkan?',

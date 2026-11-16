@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../data/whatsapp_api.dart';
 import '../../state/auth_controller.dart';
+import '../../state/planner_controller.dart';
 import '../shared.dart';
 import 'whatsapp_screen.dart';
 
@@ -9,11 +10,13 @@ class AccountScreen extends StatelessWidget {
   final AuthController auth;
   final ValueNotifier<ThemeMode> themeMode;
   final WhatsAppApi? whatsapp;
+  final PlannerController? planner;
   const AccountScreen({
     super.key,
     required this.auth,
     required this.themeMode,
     this.whatsapp,
+    this.planner,
   });
 
   @override
@@ -71,6 +74,45 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (planner != null && planner!.reminderService != null) ...[
+              const SectionHeader(
+                title: 'Pengingat sesi lokal',
+                subtitle:
+                    'Notifikasi Android terpisah dari pengingat WhatsApp.',
+              ),
+              ListenableBuilder(
+                listenable: planner!,
+                builder: (context, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PaperCard(
+                      padding: EdgeInsets.zero,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: SwitchListTile(
+                          title: const Text('Pengingat 15 menit sebelum sesi'),
+                          subtitle: const Text(
+                            'Aktifkan notifikasi lokal perangkat untuk sesi yang dikonfirmasi.',
+                          ),
+                          value: planner!.localReminderEnabled,
+                          onChanged: (value) =>
+                              planner!.setLocalReminderEnabled(value),
+                        ),
+                      ),
+                    ),
+                    if (planner!.localReminderError != null) ...[
+                      const SizedBox(height: AppLayout.space8),
+                      Notice(
+                        title: 'Izin notifikasi diperlukan',
+                        message: planner!.localReminderError!,
+                        color: colors.warningBg,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppLayout.space16),
+            ],
             if (auth.signedIn && auth.isCloud && whatsapp != null) ...[
               AppButton(
                 label: 'Pengingat WhatsApp',

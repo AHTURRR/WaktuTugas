@@ -4,12 +4,12 @@ import 'auth_storage.dart';
 class SupabaseConfig {
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://lgjzoipinceatiitptyc.supabase.co',
+    defaultValue: '',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: 'sb_publishable_Ygli6ZLlLOy614wJvpK26A_wORDcY3J',
+    defaultValue: '',
   );
 
   static bool get isConfigured =>

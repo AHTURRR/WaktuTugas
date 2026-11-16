@@ -4,6 +4,7 @@ import '../../planner/models.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
+import 'calendar_import_screen.dart';
 import 'time_form_screen.dart';
 
 class TimeScreen extends StatelessWidget {
@@ -233,11 +234,32 @@ class TimeScreen extends StatelessWidget {
                   'Kegiatan rutin, agenda sekali, dan penutupan yang memotong waktu kerja.',
             ),
             const SizedBox(height: 10),
-            AppButton(
-              label: 'Tambah kegiatan',
-              secondary: true,
-              icon: 'imgPlus',
-              onPressed: locked ? null : () => edit(context, activity: true),
+            Wrap(
+              spacing: AppLayout.space8,
+              runSpacing: AppLayout.space8,
+              children: [
+                AppButton(
+                  label: 'Tambah kegiatan',
+                  secondary: true,
+                  icon: 'imgPlus',
+                  onPressed: locked ? null : () => edit(context, activity: true),
+                ),
+                AppButton(
+                  label: 'Impor kalender',
+                  secondary: true,
+                  icon: 'imgCalendar',
+                  onPressed: locked
+                      ? null
+                      : () {
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  CalendarImportScreen(planner: planner),
+                            ),
+                          );
+                        },
+                ),
+              ],
             ),
             const SizedBox(height: AppLayout.space12),
             PaperCard(

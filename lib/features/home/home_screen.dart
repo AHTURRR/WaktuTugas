@@ -7,6 +7,7 @@ import '../../planner/models.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
+import '../time/time_form_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final PlannerController planner;
@@ -307,6 +308,17 @@ class HomeScreen extends StatelessWidget {
             ],
 
             // =================================================================
+            // 3B. PANDUAN SINGKAT AKUN BARU / KOSONG
+            // =================================================================
+            if (planner.shouldShowOnboardingGuide) ...[
+              const SizedBox(height: AppLayout.space16),
+              _OnboardingGuideCard(
+                planner: planner,
+                locked: locked,
+              ),
+            ],
+
+            // =================================================================
             // 4. AGENDA HARI INI
             // =================================================================
             const SizedBox(height: AppLayout.space16),
@@ -459,26 +471,6 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
-
-            // =================================================================
-            // 7. AKUN KOSONG: PANDUAN AWAL
-            // =================================================================
-            if (tasks.isEmpty) ...[
-              const SizedBox(height: AppLayout.section),
-              EmptyState(
-                title: 'Langkah awal penggunaan',
-                message:
-                    '1. Masukkan tugas kuliah beserta batas tenggat dan estimasi waktu pengerjaan.\n'
-                    '2. Tentukan jam ketersediaan belajar Anda di tab Waktu.\n'
-                    '3. WaktuTugas akan otomatis menyusun jadwal sesi belajar yang realistis dan bebas bentrok.',
-                action: AppButton(
-                  label: 'Atur waktu belajar',
-                  icon: 'imgClock',
-                  secondary: true,
-                  onPressed: () => context.go('/time'),
                 ),
               ),
             ],
@@ -741,6 +733,219 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _OnboardingGuideCard extends StatelessWidget {
+  final PlannerController planner;
+  final bool locked;
+
+  const _OnboardingGuideCard({
+    required this.planner,
+    required this.locked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final hasTask = planner.snapshot.tasks.isNotEmpty;
+    final hasTimeWindow = planner.snapshot.timeWindows.isNotEmpty;
+    final hasPreview =
+        planner.preview != null || planner.snapshot.sessions.isNotEmpty;
+
+    final completedCount =
+        (hasTask ? 1 : 0) + (hasTimeWindow ? 1 : 0) + (hasPreview ? 1 : 0);
+
+    final activeStep = !hasTask
+        ? 1
+        : !hasTimeWindow
+        ? 2
+        : 3;
+
+    return PaperCard(
+      borderColor: colors.primary.withValues(alpha: 0.35),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Langkah awal penggunaan',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$completedCount dari 3 langkah selesai',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.inkSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => planner.dismissOnboarding(),
+                child: const Text('Lewati'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppLayout.space12),
+          _OnboardingStepRow(
+            stepNumber: 1,
+            title: 'Buat satu tugas',
+            description:
+                'Masukkan nama tugas, tenggat, dan sisa waktu pengerjaan.',
+            done: hasTask,
+            active: activeStep == 1,
+            actionLabel: 'Buat tugas',
+            actionIcon: 'imgPlus',
+            onAction: locked ? null : () => context.push('/task/new'),
+          ),
+          const SizedBox(height: AppLayout.space8),
+          _OnboardingStepRow(
+            stepNumber: 2,
+            title: 'Tambah waktu belajar',
+            description:
+                'Tentukan rentang waktu luang agar jadwal bisa disusun.',
+            done: hasTimeWindow,
+            active: activeStep == 2,
+            actionLabel: 'Tambah waktu belajar',
+            actionIcon: 'imgClock',
+            onAction: locked
+                ? null
+                : () => Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TimeFormScreen(planner: planner),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: AppLayout.space8),
+          _OnboardingStepRow(
+            stepNumber: 3,
+            title: 'Buka pratinjau pertama',
+            description:
+                'Lihat usulan jadwal otomatis sebelum Anda menyimpannya.',
+            done: hasPreview,
+            active: activeStep == 3,
+            actionLabel: 'Buka pratinjau',
+            actionIcon: 'imgCalendar',
+            onAction: locked
+                ? null
+                : () async {
+                    final ok = await planner.generatePreview();
+                    if (!context.mounted) return;
+                    if (ok) {
+                      context.go('/schedule/preview');
+                    } else {
+                      context.go('/schedule');
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingStepRow extends StatelessWidget {
+  final int stepNumber;
+  final String title;
+  final String description;
+  final bool done;
+  final bool active;
+  final String actionLabel;
+  final String actionIcon;
+  final VoidCallback? onAction;
+
+  const _OnboardingStepRow({
+    required this.stepNumber,
+    required this.title,
+    required this.description,
+    required this.done,
+    required this.active,
+    required this.actionLabel,
+    required this.actionIcon,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppLayout.space12),
+      decoration: BoxDecoration(
+        color: active
+            ? colors.primarySoft.withValues(alpha: 0.55)
+            : colors.surfaceMuted,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: active
+              ? colors.primary.withValues(alpha: 0.4)
+              : colors.outline.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              DesignIcon(
+                done ? 'imgCheckCircle' : 'imgArrowRight',
+                size: 18,
+                color: done
+                    ? colors.successInk
+                    : active
+                    ? colors.primary
+                    : colors.inkMuted,
+              ),
+              const SizedBox(width: AppLayout.space8),
+              Expanded(
+                child: Text(
+                  '$stepNumber. $title',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    color: done ? colors.inkSecondary : colors.ink,
+                    decoration: done ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+              if (done)
+                StatusBadge(
+                  'Selesai',
+                  tone: StatusTone.success,
+                ),
+            ],
+          ),
+          if (active && !done) ...[
+            const SizedBox(height: AppLayout.space4),
+            Text(
+              description,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.inkSecondary),
+            ),
+            const SizedBox(height: AppLayout.space12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                label: actionLabel,
+                icon: actionIcon,
+                onPressed: onAction,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

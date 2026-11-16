@@ -276,6 +276,16 @@ class _TaskCard extends StatelessWidget {
                         style: AppTypography.time,
                       ),
                     ],
+                    if (task.subtasks.isNotEmpty) ...[
+                      const SizedBox(height: AppLayout.space4),
+                      Text(
+                        'Subtugas: ${task.subtaskProgressLabel}',
+                        style: type.bodySmall?.copyWith(
+                          color: colors.inkSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

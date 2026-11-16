@@ -55,7 +55,11 @@ List<Interval> expandWindows(PlannerSnapshot input, DateTime now) {
   return subtractIntervals(expand(input.timeWindows), busy);
 }
 
-SchedulePreview buildPreview(PlannerSnapshot snapshot, DateTime now) {
+SchedulePreview buildPreview(
+  PlannerSnapshot snapshot,
+  DateTime now, {
+  String? prioritizedTaskId,
+}) {
   if (snapshot.sessions.any(
     (s) => s.status == SessionStatus.planned && !s.startsAt.isAfter(now),
   )) {
@@ -68,6 +72,10 @@ SchedulePreview buildPreview(PlannerSnapshot snapshot, DateTime now) {
   var available = expandWindows(snapshot, now);
   final tasks = snapshot.tasks.where((t) => t.remainingMinutes > 0).toList()
     ..sort((a, b) {
+      if (prioritizedTaskId != null) {
+        if (a.id == prioritizedTaskId && b.id != prioritizedTaskId) return -1;
+        if (b.id == prioritizedTaskId && a.id != prioritizedTaskId) return 1;
+      }
       var result = a.deadlineAt.compareTo(b.deadlineAt);
       if (result == 0) result = a.createdAt.compareTo(b.createdAt);
       if (result == 0) result = a.id.compareTo(b.id);

@@ -4,7 +4,10 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../data/cache.dart';
+import '../data/local_reminder_service.dart';
+import '../data/onboarding_storage.dart';
 import '../data/planner_api.dart';
+import '../data/session_timer_service.dart';
 import '../planner/fixtures.dart';
 import '../planner/models.dart';
 import '../planner/schedule.dart';
@@ -39,7 +42,15 @@ class PlannerController extends ChangeNotifier {
   final DateTime Function()? _clock;
   final PlannerApi? api;
   final LocalCache? cache;
+  final OnboardingStorage? onboardingStorage;
+  final LocalSessionReminderService? reminderService;
+  late final SessionTimerService _timerService;
   final VoidCallback? onUnauthenticated;
+  bool _onboardingFinished = false;
+  bool get isOnboardingFinished => _onboardingFinished;
+  String get _onboardingKey => (!_demoMode && _userId != null) ? _userId! : 'demo';
+  bool get shouldShowOnboardingGuide =>
+      !_onboardingFinished && snapshot.sessions.isEmpty;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   DateTime get now =>
       ((_demoMode ? null : _clock)?.call() ?? _demoTime).toUtc();
@@ -50,6 +61,9 @@ class PlannerController extends ChangeNotifier {
     DateTime Function()? clock,
     this.api,
     this.cache,
+    this.onboardingStorage,
+    this.reminderService,
+    SessionTimerService? timerService,
     String? userId,
     this.onUnauthenticated,
     Stream<List<ConnectivityResult>>? connectivityStream,
@@ -57,7 +71,16 @@ class PlannerController extends ChangeNotifier {
        _userId = userId,
        _snapshot =
            initial ?? (api != null ? _emptySnapshot() : demoSnapshot()) {
+    _timerService =
+        timerService ??
+        SessionTimerService(
+          storage: MemorySessionTimerStorage(),
+          clock: () => now,
+        );
     _connectivitySub = connectivityStream?.listen(_onConnectivityChanged);
+    unawaited(loadOnboardingState());
+    unawaited(_loadAndSyncReminders());
+    unawaited(_loadAndReconcileTimer());
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> results) {
@@ -75,12 +98,126 @@ class PlannerController extends ChangeNotifier {
     super.dispose();
   }
 
+  bool get localReminderEnabled => reminderService?.isEnabled ?? false;
+  String? get localReminderError => reminderService?.lastError;
+
+  Future<void> _loadAndSyncReminders() async {
+    final service = reminderService;
+    if (service == null) return;
+    final epoch = _authEpoch;
+    final key = _onboardingKey;
+    await service.loadForUser(key);
+    if (_authEpoch != epoch || _onboardingKey != key) return;
+    await service.syncSessions(
+      _snapshot,
+      taskTitleLookup: (id) => taskById(id)?.title ?? 'Sesi belajar',
+    );
+    notifyListeners();
+  }
+
+  Future<void> _syncLocalReminders() async {
+    final service = reminderService;
+    if (service == null) return;
+    await service.syncSessions(
+      _snapshot,
+      taskTitleLookup: (id) => taskById(id)?.title ?? 'Sesi belajar',
+    );
+  }
+
+  Future<bool> setLocalReminderEnabled(bool enabled) async {
+    final service = reminderService;
+    if (service == null) return false;
+    final ok = await service.setEnabled(
+      enabled,
+      userKey: _onboardingKey,
+      snapshot: _snapshot,
+      taskTitleLookup: (id) => taskById(id)?.title ?? 'Sesi belajar',
+    );
+    notifyListeners();
+    return ok;
+  }
+
+  SessionTimerState? get activeSessionTimer => _timerService.activeTimer;
+  Duration sessionTimerElapsed(String sessionId) =>
+      _timerService.elapsedFor(sessionId);
+  bool isTimerActiveForSession(String sessionId) =>
+      _timerService.isActiveFor(sessionId);
+  bool hasOtherActiveTimer(String sessionId) =>
+      _timerService.hasOtherActiveSession(sessionId);
+  String? get sessionTimerError => _timerService.lastError;
+
+  Future<void> _loadAndReconcileTimer() async {
+    final epoch = _authEpoch;
+    final key = _onboardingKey;
+    await _timerService.loadForUser(key, _snapshot);
+    if (_authEpoch != epoch || _onboardingKey != key) return;
+    notifyListeners();
+  }
+
+  Future<bool> startSessionTimer(String sessionId) async {
+    final session = sessionById(sessionId);
+    if (session == null || session.status != SessionStatus.planned) {
+      return false;
+    }
+    final ok = await _timerService.start(session, userKey: _onboardingKey);
+    notifyListeners();
+    return ok;
+  }
+
+  Future<bool> pauseSessionTimer(String sessionId) async {
+    final ok = await _timerService.pause(sessionId);
+    notifyListeners();
+    return ok;
+  }
+
+  Future<bool> resumeSessionTimer(String sessionId) async {
+    final ok = await _timerService.resume(sessionId);
+    notifyListeners();
+    return ok;
+  }
+
+  Future<Duration> finishSessionTimer(String sessionId) async {
+    final duration = await _timerService.finishAndPause(sessionId);
+    notifyListeners();
+    return duration;
+  }
+
+  Future<void> loadOnboardingState() async {
+    final storage = onboardingStorage;
+    if (storage == null) return;
+    final epoch = _authEpoch;
+    final key = _onboardingKey;
+    final finished = await storage.isFinished(key);
+    if (_authEpoch != epoch || _onboardingKey != key) return;
+    if (_onboardingFinished != finished) {
+      _onboardingFinished = finished;
+      notifyListeners();
+    }
+  }
+
+  Future<void> dismissOnboarding() async {
+    if (!_onboardingFinished) {
+      _onboardingFinished = true;
+      notifyListeners();
+    }
+    await onboardingStorage?.markFinished(_onboardingKey);
+  }
+
+  Future<void> completeOnboarding() async {
+    if (!_onboardingFinished) {
+      _onboardingFinished = true;
+      notifyListeners();
+    }
+    await onboardingStorage?.markFinished(_onboardingKey);
+  }
+
   void bindUser(String? nextUserId) {
     if (_userId == nextUserId && !_demoMode) return;
     _authEpoch++;
     _userId = nextUserId;
     _demoMode = false;
     _isPending = false;
+    _onboardingFinished = false;
     _snapshot = _emptySnapshot();
     _preview = null;
     error = null;
@@ -89,6 +226,13 @@ class PlannerController extends ChangeNotifier {
     _fetchedAt = null;
     needsReschedule = false;
     notifyListeners();
+    unawaited(loadOnboardingState());
+    unawaited(
+      reminderService?.onSignedOutOrSwitched().then((_) => _loadAndSyncReminders()) ??
+          Future<void>.value(),
+    );
+    _timerService.resetMemoryOnSignOut();
+    unawaited(_loadAndReconcileTimer());
   }
 
   Task? taskById(String id) =>
@@ -104,6 +248,7 @@ class PlannerController extends ChangeNotifier {
     _demoMode = true;
     _userId = null;
     _isPending = false;
+    _onboardingFinished = false;
     _snapshot = demoSnapshot();
     _preview = null;
     error = null;
@@ -113,6 +258,13 @@ class PlannerController extends ChangeNotifier {
     needsReschedule = false;
     _demoTime = demoNow;
     notifyListeners();
+    unawaited(loadOnboardingState());
+    unawaited(
+      reminderService?.onSignedOutOrSwitched().then((_) => _loadAndSyncReminders()) ??
+          Future<void>.value(),
+    );
+    _timerService.resetMemoryOnSignOut();
+    unawaited(_loadAndReconcileTimer());
   }
 
   void clear() {
@@ -120,6 +272,7 @@ class PlannerController extends ChangeNotifier {
     _userId = null;
     _demoMode = false;
     _isPending = false;
+    _onboardingFinished = false;
     _snapshot = _emptySnapshot();
     _preview = null;
     error = null;
@@ -128,6 +281,8 @@ class PlannerController extends ChangeNotifier {
     _fetchedAt = null;
     needsReschedule = false;
     notifyListeners();
+    unawaited(reminderService?.onSignedOutOrSwitched());
+    _timerService.resetMemoryOnSignOut();
   }
 
   Future<bool> fetchSnapshot({
@@ -143,6 +298,7 @@ class PlannerController extends ChangeNotifier {
       _authEpoch++;
       _userId = userId;
       _demoMode = false;
+      _onboardingFinished = false;
       _snapshot = _emptySnapshot();
       _preview = null;
       _isOfflineSnapshot = false;
@@ -170,10 +326,23 @@ class PlannerController extends ChangeNotifier {
       if (!preserveRescheduleFlag) {
         needsReschedule = false;
       }
+      if (fetched.sessions.isNotEmpty) {
+        _onboardingFinished = true;
+        await onboardingStorage?.markFinished(resolvedUserId ?? 'demo');
+      } else if (onboardingStorage != null) {
+        _onboardingFinished = await onboardingStorage!.isFinished(
+          resolvedUserId ?? 'demo',
+        );
+      }
+      if (_authEpoch != reqEpoch || _userId != resolvedUserId) {
+        return false;
+      }
       final cache = this.cache;
       if (cache != null && resolvedUserId != null) {
         await cache.writeCachedSnapshot(resolvedUserId, fetched, _fetchedAt!);
       }
+      await _loadAndSyncReminders();
+      await _loadAndReconcileTimer();
       return true;
     } on PlannerApiException catch (e) {
       if (_authEpoch != reqEpoch || _userId != resolvedUserId) {
@@ -196,6 +365,13 @@ class PlannerController extends ChangeNotifier {
           _isOfflineSnapshot = true;
           _fetchedAt = cached.fetchedAt;
           needsReschedule = false;
+          if (cached.snapshot.sessions.isNotEmpty) {
+            _onboardingFinished = true;
+          } else if (onboardingStorage != null) {
+            _onboardingFinished = await onboardingStorage!.isFinished(
+              resolvedUserId,
+            );
+          }
           return true;
         }
       }
@@ -339,6 +515,7 @@ class PlannerController extends ChangeNotifier {
     List<TimeWindow>? windows,
     List<Activity>? activities,
     List<PlannerSession>? sessions,
+    bool markReschedule = true,
   }) {
     _snapshot = PlannerSnapshot(
       revision: snapshot.revision + 1,
@@ -347,7 +524,11 @@ class PlannerController extends ChangeNotifier {
       activities: activities ?? snapshot.activities,
       sessions: sessions ?? snapshot.sessions,
     );
-    needsReschedule = true;
+    if (markReschedule) {
+      needsReschedule = true;
+    }
+    unawaited(_syncLocalReminders());
+    unawaited(_timerService.reconcileWithSnapshot(_snapshot));
   }
 
   Future<bool> saveTask({
@@ -388,6 +569,7 @@ class PlannerController extends ChangeNotifier {
         deadlineAt: deadline,
         remainingMinutes: remaining,
         createdAt: existing?.createdAt ?? now,
+        subtasks: existing?.subtasks ?? const <Subtask>[],
       );
       _replace(
         tasks: [
@@ -420,6 +602,94 @@ class PlannerController extends ChangeNotifier {
       _replace(
         tasks: snapshot.tasks.where((t) => t.id != id).toList(),
         sessions: snapshot.sessions.where((s) => s.taskId != id).toList(),
+      );
+    });
+  }
+
+  Future<bool> saveSubtask({
+    required String taskId,
+    String? subtaskId,
+    required String title,
+    required bool isCompleted,
+    int? expectedRevision,
+  }) {
+    final api = this.api;
+    if (api != null && !_demoMode) {
+      return _runApi(
+        (revision) => api.saveSubtask(
+          subtaskId: subtaskId,
+          taskId: taskId,
+          title: title,
+          isCompleted: isCompleted,
+          expectedRevision: expectedRevision ?? revision,
+        ),
+        marksReschedule: false,
+      );
+    }
+    return _run(() {
+      _checkRevision(expectedRevision);
+      final task = taskById(taskId);
+      if (task == null) throw StateError('Tugas tidak ditemukan.');
+      final existing = subtaskId == null
+          ? null
+          : task.subtasks.where((s) => s.id == subtaskId).firstOrNull;
+      if (subtaskId != null && existing == null) {
+        throw StateError('Subtugas tidak ditemukan.');
+      }
+      final subtask = Subtask(
+        id: subtaskId ?? 'subtask-${snapshot.revision + 1}-${task.subtasks.length + 1}',
+        taskId: taskId,
+        title: title,
+        isCompleted: isCompleted,
+      );
+      final nextSubtasks = [
+        for (final s in task.subtasks)
+          if (s.id == subtask.id) subtask else s,
+        if (existing == null) subtask,
+      ];
+      _replace(
+        tasks: [
+          for (final t in snapshot.tasks)
+            if (t.id == task.id) t.withSubtasks(nextSubtasks) else t,
+        ],
+        markReschedule: false,
+      );
+    });
+  }
+
+  Future<bool> deleteSubtask({
+    required String taskId,
+    required String subtaskId,
+    int? expectedRevision,
+  }) {
+    final api = this.api;
+    if (api != null && !_demoMode) {
+      return _runApi(
+        (revision) => api.deleteSubtask(
+          subtaskId: subtaskId,
+          expectedRevision: expectedRevision ?? revision,
+        ),
+        marksReschedule: false,
+      );
+    }
+    return _run(() {
+      _checkRevision(expectedRevision);
+      final task = taskById(taskId);
+      if (task == null) throw StateError('Tugas tidak ditemukan.');
+      if (!task.subtasks.any((s) => s.id == subtaskId)) {
+        throw StateError('Subtugas tidak ditemukan.');
+      }
+      _replace(
+        tasks: [
+          for (final t in snapshot.tasks)
+            if (t.id == task.id)
+              t.withSubtasks(
+                t.subtasks.where((s) => s.id != subtaskId).toList(),
+              )
+            else
+              t,
+        ],
+        markReschedule: false,
       );
     });
   }
@@ -523,10 +793,16 @@ class PlannerController extends ChangeNotifier {
     });
   }
 
-  Future<bool> generatePreview() => _run(() {
-    _preview = null;
-    _preview = buildPreview(snapshot, now);
-  });
+  Future<bool> generatePreview() async {
+    final ok = await _run(() {
+      _preview = null;
+      _preview = buildPreview(snapshot, now);
+    });
+    if (ok && snapshot.tasks.isNotEmpty && snapshot.timeWindows.isNotEmpty) {
+      await completeOnboarding();
+    }
+    return ok;
+  }
   Future<bool> confirmSchedule() {
     final api = this.api;
     if (api != null && !_demoMode) {

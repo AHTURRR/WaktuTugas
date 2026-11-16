@@ -215,6 +215,52 @@ class PlannerApi {
     }
   }
 
+  Future<int> saveSubtask({
+    String? subtaskId,
+    required String taskId,
+    required String title,
+    required bool isCompleted,
+    required int expectedRevision,
+  }) async {
+    try {
+      final res = await _client
+          .rpc(
+            'save_subtask',
+            params: {
+              'p_subtask_id': subtaskId,
+              'p_task_id': taskId,
+              'p_title': title,
+              'p_is_completed': isCompleted,
+              'p_expected_revision': expectedRevision,
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+      return _parseRevision(res);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  Future<int> deleteSubtask({
+    required String subtaskId,
+    required int expectedRevision,
+  }) async {
+    try {
+      final res = await _client
+          .rpc(
+            'delete_subtask',
+            params: {
+              'p_subtask_id': subtaskId,
+              'p_expected_revision': expectedRevision,
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+      return _parseRevision(res);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
   Future<int> saveTimeWindow({
     String? id,
     int? weekday,

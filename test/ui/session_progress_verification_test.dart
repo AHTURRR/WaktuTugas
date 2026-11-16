@@ -51,9 +51,6 @@ void main() {
       debugPrint('[STEP 2] Jadwal awal terkonfirmasi dengan 5 sesi');
 
       final session1 = p.snapshot.sessions[0]; // Sesi 1 (T01)
-      final session2 = p.snapshot.sessions[1]; // Sesi 2 (T01)
-      final session3 = p.snapshot.sessions[2]; // Sesi 3 (T02)
-
       // =========================================================================
       // 1. UJI SESI SELESAI DENGAN SISA POSITIF (remaining = 90)
       // =========================================================================

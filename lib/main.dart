@@ -5,7 +5,10 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'app/app.dart';
 import 'data/auth_storage.dart';
 import 'data/cache.dart';
+import 'data/local_reminder_service.dart';
+import 'data/onboarding_storage.dart';
 import 'data/planner_api.dart';
+import 'data/session_timer_service.dart';
 import 'data/supabase_client.dart';
 import 'data/whatsapp_api.dart';
 import 'state/auth_controller.dart';
@@ -20,7 +23,17 @@ Future<void> main() async {
     await SupabaseConfig.initialize(localStorage: storage);
     cache = await LocalCache.initialize();
   }
+  const preferences = FlutterSecureStorage();
+  final reminderService = LocalSessionReminderService(
+    storage: const SecureLocalReminderStorage(preferences),
+    gateway: FlutterLocalNotificationGateway(),
+    clock: SupabaseConfig.isConfigured ? DateTime.now : null,
+  );
   late final PlannerController planner;
+  final timerService = SessionTimerService(
+    storage: const SecureSessionTimerStorage(preferences),
+    clock: () => planner.now,
+  );
   final auth = AuthController(
     client: SupabaseConfig.isConfigured ? SupabaseConfig.client : null,
     cache: cache,
@@ -31,6 +44,9 @@ Future<void> main() async {
     clock: SupabaseConfig.isConfigured ? DateTime.now : null,
     api: SupabaseConfig.isConfigured ? PlannerApi(SupabaseConfig.client) : null,
     cache: cache,
+    onboardingStorage: const SecureOnboardingStorage(preferences),
+    reminderService: reminderService,
+    timerService: timerService,
     userId: auth.userId,
     onUnauthenticated: auth.handleUnauthenticated,
     connectivityStream: SupabaseConfig.isConfigured
@@ -38,7 +54,6 @@ Future<void> main() async {
         : null,
   );
   await auth.restoreSession();
-  const preferences = FlutterSecureStorage();
   const themeKey = 'waktutugas.appearance';
   var themeMode = ThemeMode.system;
   try {

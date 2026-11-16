@@ -47,6 +47,15 @@ class _WaktuTugasAppState extends State<WaktuTugasApp> {
         widget.planner.api != null) {
       widget.planner.fetchSnapshot(userId: widget.auth.userId);
     }
+    widget.planner.reminderService?.initialize(
+      onOpenSession: _openSessionFromNotification,
+    );
+  }
+
+  void _openSessionFromNotification(String sessionId) {
+    if (!mounted || !widget.auth.signedIn) return;
+    if (widget.planner.sessionById(sessionId) == null) return;
+    router.go('/session/$sessionId');
   }
 
   void _themeChanged() => widget.onThemeModeChanged?.call(themeMode.value);

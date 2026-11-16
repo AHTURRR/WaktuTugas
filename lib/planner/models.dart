@@ -71,11 +71,54 @@ List<T> jsonList<T>(Json json, String key, T Function(Json) parse) {
   }).toList();
 }
 
+class Subtask {
+  final String id;
+  final String taskId;
+  final String title;
+  final bool isCompleted;
+  Subtask({
+    required this.id,
+    required this.taskId,
+    required String title,
+    this.isCompleted = false,
+  }) : title = title.trim() {
+    require(
+      id.isNotEmpty &&
+          taskId.isNotEmpty &&
+          this.title.isNotEmpty &&
+          this.title.length <= 120,
+      'Nama subtugas wajib diisi, maksimal 120 karakter.',
+    );
+  }
+  factory Subtask.fromJson(Json j) {
+    require(j['is_completed'] is bool, 'is_completed harus boolean.');
+    return Subtask(
+      id: textField(j, 'id'),
+      taskId: textField(j, 'task_id'),
+      title: textField(j, 'title'),
+      isCompleted: j['is_completed'] as bool,
+    );
+  }
+  Json toJson() => {
+    'id': id,
+    'task_id': taskId,
+    'title': title,
+    'is_completed': isCompleted,
+  };
+  Subtask copyWith({String? title, bool? isCompleted}) => Subtask(
+    id: id,
+    taskId: taskId,
+    title: title ?? this.title,
+    isCompleted: isCompleted ?? this.isCompleted,
+  );
+}
+
 class Task {
   final String id, title;
   final String? course;
   final DateTime deadlineAt, createdAt;
   final int remainingMinutes;
+  final List<Subtask> subtasks;
   Task({
     required this.id,
     required String title,
@@ -83,9 +126,11 @@ class Task {
     required DateTime deadlineAt,
     required this.remainingMinutes,
     required DateTime createdAt,
+    List<Subtask> subtasks = const <Subtask>[],
   }) : title = title.trim(),
        deadlineAt = deadlineAt.toUtc(),
-       createdAt = createdAt.toUtc() {
+       createdAt = createdAt.toUtc(),
+       subtasks = List.unmodifiable(subtasks) {
     require(
       id.isNotEmpty && this.title.isNotEmpty && this.title.length <= 120,
       'Nama tugas wajib diisi, maksimal 120 karakter.',
@@ -95,7 +140,20 @@ class Task {
       'Mata kuliah maksimal 100 karakter.',
     );
     require(remainingMinutes >= 0, 'Sisa menit tidak boleh negatif.');
+    require(
+      this.subtasks.every((s) => s.taskId == id),
+      'Subtugas harus merujuk ke tugas induk yang sama.',
+    );
+    final subtaskIds = this.subtasks.map((s) => s.id).toList();
+    require(
+      subtaskIds.toSet().length == subtaskIds.length,
+      'ID subtugas duplikat.',
+    );
   }
+  int get completedSubtasksCount =>
+      subtasks.where((s) => s.isCompleted).length;
+  String get subtaskProgressLabel =>
+      '$completedSubtasksCount dari ${subtasks.length} selesai';
   factory Task.fromJson(Json j) {
     require(
       j['course'] == null || j['course'] is String,
@@ -108,6 +166,9 @@ class Task {
       deadlineAt: instant(j, 'deadline_at'),
       remainingMinutes: intField(j, 'remaining_minutes'),
       createdAt: instant(j, 'created_at'),
+      subtasks: j['subtasks'] == null
+          ? const <Subtask>[]
+          : jsonList(j, 'subtasks', Subtask.fromJson),
     );
   }
   Json toJson() => {
@@ -117,6 +178,7 @@ class Task {
     'deadline_at': deadlineAt.toIso8601String(),
     'remaining_minutes': remainingMinutes,
     'created_at': createdAt.toIso8601String(),
+    'subtasks': subtasks.map((s) => s.toJson()).toList(),
   };
   Task withRemaining(int minutes) => Task(
     id: id,
@@ -125,6 +187,16 @@ class Task {
     deadlineAt: deadlineAt,
     remainingMinutes: minutes,
     createdAt: createdAt,
+    subtasks: subtasks,
+  );
+  Task withSubtasks(List<Subtask> nextSubtasks) => Task(
+    id: id,
+    title: title,
+    course: course,
+    deadlineAt: deadlineAt,
+    remainingMinutes: remainingMinutes,
+    createdAt: createdAt,
+    subtasks: nextSubtasks,
   );
 }
 

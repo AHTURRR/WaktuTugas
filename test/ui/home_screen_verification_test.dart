@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:waktu_tugas/app/app.dart';
 import 'package:waktu_tugas/planner/models.dart';
-import 'package:waktu_tugas/planner/schedule.dart';
 import 'package:waktu_tugas/state/auth_controller.dart';
 import 'package:waktu_tugas/state/planner_controller.dart';
 

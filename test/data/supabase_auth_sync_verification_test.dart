@@ -12,7 +12,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:waktu_tugas/data/auth_storage.dart';
 import 'package:waktu_tugas/data/cache.dart';
 import 'package:waktu_tugas/data/planner_api.dart';
-import 'package:waktu_tugas/planner/fixtures.dart';
 import 'package:waktu_tugas/planner/models.dart';
 import 'package:waktu_tugas/state/auth_controller.dart';
 import 'package:waktu_tugas/state/planner_controller.dart';

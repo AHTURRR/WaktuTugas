@@ -1,5 +1,19 @@
 # Hasil Pengujian WaktuTugas 1.0.0
 
+## Verifikasi workspace lokal — 16 November 2026 (WIB)
+
+| Area | Perintah / hasil aktual |
+| --- | --- |
+| Flutter dependensi | `flutter pub get` lulus. |
+| Format | `dart format --output=none --set-exit-if-changed lib test integration_test` gagal dengan exit 1 karena 28 file masih dilaporkan berubah format; tidak ada lagi kegagalan parse. Pemformatan massal tidak diterapkan agar perubahan lokal pengguna tidak tertimpa. |
+| Flutter analyzer | `flutter analyze` lulus, 0 isu. |
+| Regresi planner/data/UI | `flutter test test/planner test/data test/ui` lulus 141/141, mencakup tambah waktu, onboarding, saran slot, prioritas, impor `.ics`, pengingat lokal, timer, ringkasan mingguan, subtugas, progres, dan WhatsApp UI. |
+| Supabase lokal | `supabase start`, `supabase migration up`, dan `supabase test db` tidak dapat dijalankan: Docker Desktop tidak menyediakan `dockerDesktopLinuxEngine` dan PostgreSQL lokal `127.0.0.1:54322` menolak koneksi. Migrasi 005 dan skenario dua akun/subtugas belum terverifikasi. |
+| RPC dua akun | `flutter test test/backend/planner_rpc_test.dart` dijalankan dengan dua akun lokal kosong dan gagal saat login karena backend lokal tidak tersedia. |
+| Mock OpenWA | `node --test supabase/functions/whatsapp.test.mjs`: 2 lulus, 0 gagal, 1 dilewati; tes yang dilewati memerlukan Supabase lokal. |
+| Android | `storage_test.dart` lulus 1/1; `app_flow_test.dart` awalnya gagal karena `app.main()` tidak di-await, diperbaiki, lalu lulus 1/1 pada emulator `emulator-5554` (AVD API 35). `task_crud_test.dart` gagal sebelum CRUD karena tanpa URL Supabase lokal. Uji notifikasi nyata saat aplikasi ditutup/reboot dan timer latar belakang belum dilakukan. |
+| Perbaikan | Default URL/key Supabase dikosongkan agar tanpa `--dart-define` masuk mode demo; `app_flow_test.dart` menunggu inisialisasi async; struktur/lint layar tugas diperbaiki. Uji ulang analyzer dan suite regresi lulus. |
+
 **Tanggal verifikasi:** 11 November 2026 (WIB)
 
 **Acuan:** PRD WaktuTugas v1.2, bagian 10
@@ -154,3 +168,26 @@ Langkah aktivasi dan uji penerimaan ada di [panduan pengingat WhatsApp](WHATSAPP
 - Pemeriksaan lanjutan pada emulator yang sama mengonfirmasi DNS Supabase sudah berfungsi dan formulir nomor berhasil dimuat. Satu permintaan OTP untuk nomor uji yang diberikan pemilik berhasil membuka langkah **Verifikasi nomor** tanpa galat pengiriman. Status produksi menunjukkan satu verifikasi tertunda. Penerimaan di WhatsApp menunggu konfirmasi pengguna.
 - Uji OTP produksi lulus. Pemilik menerima kode melalui WhatsApp, dan pengiriman kode dari APK di emulator menampilkan status **Terverifikasi**. Supabase mengonfirmasi verifikasi tersimpan dan tantangan OTP sudah ditutup.
 - Uji pengingat terjadwal produksi lulus pada 14 November 2026. Pengingat aktif pada akun uji dan aplikasi di emulator dihentikan sebelum Cron berjalan. Tugas uji sementara dibuat langsung di Supabase dengan tenggat 15 November pukul 09.41 WIB. Cron pukul 09.41 WIB memicu percobaan pertama dan Supabase mencatat `accepted` pukul 09.41.07 WIB. OpenWA mencatat satu pesan keluar berstatus `read`. Setelah putaran Cron pukul 09.42 WIB, masih ada satu catatan pengiriman dan satu pesan keluar. Tugas uji dihapus setelah pemeriksaan, dan pengingat akun tetap aktif.
+
+## Panduan Awal & Simulasi Jadwal — 16 November 2026 (WIB)
+
+| Pemeriksaan | Hasil aktual |
+| --- | --- |
+| Analisis statis (`lib/`) | `flutter analyze --no-pub lib` lulus dengan 0 temuan (`No issues found!`). |
+| Rangkaian tes unit & widget | `flutter test -j 1 --no-pub test/planner test/data test/ui` lulus **113/113** tes. |
+| Simulasi `Coba tambah waktu` | `capacity_simulation_test.dart` (4/4) dan `try_add_time_verification_test.dart` (8/8) lulus: penutupan penuh/sebagian, tabrakan blok waktu, dampak tugas lain, pembatalan, luring, revisi basi, dan kegagalan pratinjau pasca-simpan. |
+| Panduan akun baru (`Onboarding`) | `onboarding_guide_test.dart` (7/7) lulus: akun kosong, kelanjutan bertahap, aksi Lewati, persistensi per akun, dan pengguna lama langsung memakai aplikasi. |
+| Saran waktu otomatis (`Cari saran waktu`) | `time_suggestions_test.dart` (5/5) dan `suggest_time_verification_test.dart` (3/3) lulus: hingga 3 kandidat, penghormatan kegiatan tetap/terblokir, urutan prioritas dampak, hasil kosong, dan pembaruan revisi otomatis. |
+| Simulasi `Coba prioritaskan tugas ini` | `priority_simulation_test.dart` (3/3) dan `try_prioritize_task_verification_test.dart` (3/3) lulus: perbandingan dua tugas bersaing (+menit diperoleh & menit hilang tugas lain), skenario tanpa perbaikan (`+0 menit`), penghormatan jadwal kuliah/blok waktu/tenggat, perubahan data saat simulasi terbuka, dan pembatalan tanpa mengubah preferensi atau jadwal tersimpan. |
+| Build & instalasi APK Android | APK rilis `1.0.0+1` (`android-x64`, 22.3 MB, SHA-256 `D0267344532AD6739F0A33E9E35C9190B0C9509D496311A467A0FE45C246AD05`) berhasil dibangun dan dipasang (`Performing Streamed Install: Success`) pada `emulator-5554` (Android 15/API 35). |
+| Tes integrasi end-to-end Android | `integration_test/app_flow_test.dart` pada `emulator-5554` terhenti karena restart server/emulator sebelum selesai (perlu dijalankan ulang bila emulator aktif kembali). |
+
+## Impor Kalender (.ics) & Pengingat Lokal Android — 16 November 2026 (WIB)
+
+| Pemeriksaan | Hasil aktual |
+| --- | --- |
+| Analisis statis (`lib/`) | `flutter analyze --no-pub lib` lulus dengan 0 temuan (`No issues found!`). |
+| Impor kalender (`.ics`) | `ics_import_test.dart` (5/5) dan `calendar_import_verification_test.dart` (4/4) lulus: pembacaan UTC/zona waktu lain ke WIB, file rusak, item dilewati (sepanjang hari, `RRULE`, zona waktu tak dikenal), deteksi impor berulang tanpa duplikasi, hasil simpan per item saat gagal sebagian, serta pemotongan kapasitas belajar pada `buildPreview`. |
+| Pengingat lokal Android (15 menit sebelum sesi) | `local_reminder_service_test.dart` (3/3), `local_reminder_verification_test.dart` (3/3), dan `whatsapp_screen_test.dart` (1/1) lulus: izin diberikan/ditolak, cakupan sesi yang sudah ada, pembatalan saat sesi selesai/terlewat/dihapus/keluar/ganti akun, zona waktu UTC/WIB, cold-start tap ke `/session/:id`, dan pemisahan dari pengaturan WhatsApp. |
+| Build APK Android terbaru | `flutter build apk --release --target-platform android-x64` lulus dengan `flutter_local_notifications` 22.0.0, `file_picker` 13.3.3, *core library desugaring*, serta `ScheduledNotificationBootReceiver` di `AndroidManifest.xml` (`22.6 MB`, SHA-256 `CF2D2C742116DC40CC46B33E68405D97691E409B6D496311A467A0FE45C246AD05`). |
+| Keterbatasan waktu pengiriman Android (targetSdk / Android 12–15) | Pada Android 12–15 tanpa izin *Alarms & Reminders* (`SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`), aplikasi otomatis memakai `AndroidScheduleMode.inexactAllowWhileIdle` sehingga mode Doze / penghemat baterai dapat menunda pengiriman beberapa menit dari tepat 15 menit sebelum sesi. Setelah ponsel dinyalakan ulang, `ScheduledNotificationBootReceiver` menjadwalkan ulang notifikasi tersimpan setelah `BOOT_COMPLETED` (pada sebagian perangkat OEM dengan pembatasan latar belakang ketat, pengiriman pasca-boot dapat tertunda sampai perangkat dibuka kuncinya). Pengujian pengiriman nyata pada perangkat fisik/emulator Android 15 setelah reboot belum dijalankan karena emulator saat ini tidak aktif. |

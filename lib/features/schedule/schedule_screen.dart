@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
+import 'weekly_summary_card.dart';
 
 class ScheduleScreen extends StatelessWidget {
   final PlannerController planner;
@@ -108,6 +109,7 @@ class ScheduleScreen extends StatelessWidget {
                 icon: 'imgAlertCircle',
               ),
             ErrorNotice(planner.error),
+            WeeklySummaryCard(planner: planner),
             if (sessions.isEmpty)
               const EmptyState(
                 title: 'Belum ada jadwal terkonfirmasi',

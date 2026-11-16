@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 import '../../app/theme.dart';
+import '../../planner/models.dart';
 import '../../planner/schedule.dart';
 import '../../state/planner_controller.dart';
 import '../shared.dart';
@@ -18,9 +19,13 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   final form = GlobalKey<FormState>();
   final titleFocus = FocusNode(), remainingFocus = FocusNode();
   late final TextEditingController title, course, remaining;
+  final newSubtaskController = TextEditingController();
+  final editSubtaskController = TextEditingController();
   late DateTime deadline;
-  late final int revision;
+  late int revision;
   bool titleEdited = false, remainingEdited = false;
+  String? editingSubtaskId;
+  bool showEstimateUpdatePrompt = false;
 
   bool get isNew => widget.taskId == null;
   @override
@@ -44,9 +49,87 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     title.dispose();
     course.dispose();
     remaining.dispose();
+    newSubtaskController.dispose();
+    editSubtaskController.dispose();
     titleFocus.dispose();
     remainingFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _addSubtask(Task task) async {
+    final trimmed = newSubtaskController.text.trim();
+    if (trimmed.isEmpty) return;
+    final ok = await widget.planner.saveSubtask(
+      taskId: task.id,
+      title: trimmed,
+      isCompleted: false,
+      expectedRevision: revision,
+    );
+    if (ok && mounted) {
+      setState(() {
+        revision = widget.planner.snapshot.revision;
+        newSubtaskController.clear();
+      });
+    }
+  }
+
+  Future<void> _toggleSubtask(Task task, Subtask subtask, bool completed) async {
+    final ok = await widget.planner.saveSubtask(
+      taskId: task.id,
+      subtaskId: subtask.id,
+      title: subtask.title,
+      isCompleted: completed,
+      expectedRevision: revision,
+    );
+    if (ok && mounted) {
+      setState(() {
+        revision = widget.planner.snapshot.revision;
+        if (completed) {
+          showEstimateUpdatePrompt = true;
+        }
+      });
+    }
+  }
+
+  void _startRenameSubtask(Subtask subtask) {
+    setState(() {
+      editingSubtaskId = subtask.id;
+      editSubtaskController.text = subtask.title;
+    });
+  }
+
+  Future<void> _saveRenameSubtask(Task task, Subtask subtask) async {
+    final trimmed = editSubtaskController.text.trim();
+    if (trimmed.isEmpty) return;
+    final ok = await widget.planner.saveSubtask(
+      taskId: task.id,
+      subtaskId: subtask.id,
+      title: trimmed,
+      isCompleted: subtask.isCompleted,
+      expectedRevision: revision,
+    );
+    if (ok && mounted) {
+      setState(() {
+        revision = widget.planner.snapshot.revision;
+        editingSubtaskId = null;
+      });
+    }
+  }
+
+  Future<void> _deleteSubtask(Task task, Subtask subtask) async {
+    final ok = await widget.planner.deleteSubtask(
+      taskId: task.id,
+      subtaskId: subtask.id,
+      expectedRevision: revision,
+    );
+    if (ok && mounted) {
+      setState(() {
+        revision = widget.planner.snapshot.revision;
+        if (editingSubtaskId == subtask.id) {
+          editingSubtaskId = null;
+        }
+      });
+    }
   }
 
   Future<void> pickDeadline({bool timeOnly = false}) async {
@@ -260,6 +343,210 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     ],
                   ),
                 ),
+                if (widget.taskId != null)
+                  Builder(
+                    builder: (context) {
+                      final task = p.taskById(widget.taskId!)!;
+                      return PaperCard(
+                        key: const Key('subtasks-card'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: SectionHeader(
+                                    title: 'Subtugas',
+                                    subtitle:
+                                        'Checklist langkah satu tingkat. Sumber penjadwalan tetap memakai Sisa waktu (menit) tugas induk.',
+                                  ),
+                                ),
+                                if (task.subtasks.isNotEmpty) ...[
+                                  const SizedBox(width: AppLayout.space8),
+                                  StatusBadge(
+                                    task.subtaskProgressLabel,
+                                    key: const Key('subtask-progress'),
+                                    tone:
+                                        task.completedSubtasksCount ==
+                                            task.subtasks.length
+                                        ? StatusTone.success
+                                        : StatusTone.info,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: AppLayout.space12),
+                            if (task.subtasks.isEmpty)
+                              Text(
+                                'Belum ada subtugas pada tugas ini.',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: colors.inkSecondary),
+                              )
+                            else
+                              Material(
+                                type: MaterialType.transparency,
+                                child: Column(
+                                  children: [
+                                    for (final sub in task.subtasks)
+                                      if (editingSubtaskId == sub.id)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextField(
+                                                  key: Key(
+                                                    'edit-subtask-${sub.id}',
+                                                  ),
+                                                  controller:
+                                                      editSubtaskController,
+                                                  enabled: !locked,
+                                                  maxLength: 120,
+                                                  decoration:
+                                                      const InputDecoration(
+                                                        labelText:
+                                                            'Nama subtugas',
+                                                      ),
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                width: AppLayout.space8,
+                                              ),
+                                              IconButton(
+                                                key: Key(
+                                                  'save-rename-subtask-${sub.id}',
+                                                ),
+                                                tooltip: 'Simpan nama subtugas',
+                                                icon: DesignIcon(
+                                                  'imgCheck',
+                                                  size: 18,
+                                                  color: colors.successInk,
+                                                ),
+                                                onPressed: locked
+                                                    ? null
+                                                    : () => _saveRenameSubtask(
+                                                        task,
+                                                        sub,
+                                                      ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Batal ubah subtugas',
+                                                icon: const Icon(
+                                                  Icons.close,
+                                                  size: 18,
+                                                ),
+                                                onPressed: () => setState(
+                                                  () => editingSubtaskId = null,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      else
+                                        Row(
+                                          children: [
+                                            Checkbox(
+                                              key: Key(
+                                                'toggle-subtask-${sub.id}',
+                                              ),
+                                              value: sub.isCompleted,
+                                              onChanged: locked
+                                                  ? null
+                                                  : (val) => _toggleSubtask(
+                                                      task,
+                                                      sub,
+                                                      val ?? false,
+                                                    ),
+                                            ),
+                                            Expanded(
+                                              child: Text(
+                                                sub.title,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: colors.ink,
+                                                      decoration:
+                                                          sub.isCompleted
+                                                          ? TextDecoration
+                                                                .lineThrough
+                                                          : null,
+                                                    ),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              key: Key(
+                                                'rename-subtask-${sub.id}',
+                                              ),
+                                              tooltip: 'Ubah ${sub.title}',
+                                              icon: const DesignIcon(
+                                                'imgEdit',
+                                                size: 18,
+                                              ),
+                                              onPressed: locked
+                                                  ? null
+                                                  : () => _startRenameSubtask(
+                                                      sub,
+                                                    ),
+                                            ),
+                                            IconButton(
+                                              key: Key(
+                                                'delete-subtask-${sub.id}',
+                                              ),
+                                              tooltip: 'Hapus ${sub.title}',
+                                              color: colors.dangerInk,
+                                              icon: const DesignIcon(
+                                                'imgTrash',
+                                                size: 18,
+                                              ),
+                                              onPressed: locked
+                                                  ? null
+                                                  : () => _deleteSubtask(
+                                                      task,
+                                                      sub,
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                  ],
+                                ),
+                              ),
+                            if (showEstimateUpdatePrompt) ...[
+                              const SizedBox(height: AppLayout.space12),
+                              Notice(
+                                title: 'Subtugas selesai',
+                                message:
+                                    'Jika sisa pengerjaan berkurang, perbarui Sisa waktu (menit) tugas induk di atas lalu tekan Simpan tugas.',
+                                color: colors.infoBg,
+                              ),
+                            ],
+                            const SizedBox(height: AppLayout.space12),
+                            TextField(
+                              key: const Key('new-subtask-title'),
+                              controller: newSubtaskController,
+                              enabled: !locked,
+                              maxLength: 120,
+                              decoration: const InputDecoration(
+                                labelText: 'Subtugas baru',
+                                hintText: 'Contoh: Susun daftar pustaka',
+                              ),
+                            ),
+                            const SizedBox(height: AppLayout.space8),
+                            OutlinedButton.icon(
+                              onPressed: locked
+                                  ? null
+                                  : () => _addSubtask(task),
+                              icon: const DesignIcon('imgPlus', size: 16),
+                              label: const Text('Tambah subtugas'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 if (p.isPending)
                   const Notice(
                     title: 'Sedang menyimpan',

@@ -97,6 +97,7 @@ GoRouter createRouter(
                           auth: auth,
                           themeMode: themeMode,
                           whatsapp: whatsapp,
+                          planner: planner,
                         ),
                       ),
                     ),
